@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// GET /api/admin/candidates
 router.get('/candidates', (req, res) => {
   const secretKey = req.query.key;
   const validKey = process.env.ADMIN_SECRET || 'studentadmin2026';

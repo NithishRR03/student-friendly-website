@@ -41,45 +41,6 @@ app.use(express.static(path.join(__dirname, 'public'))); // the website itself
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'server_error' }); });
 app.listen(PORT, () => console.log(`Student Friendly running on port ${PORT}`));
 
-// Admin endpoint to retrieve registered candidates & resume data
-app.get('/api/admin/candidates', (req, res) => {
-  const secretKey = req.query.key;
-  if (!secretKey || secretKey !== (process.env.ADMIN_SECRET || 'studentadmin2026')) {
-    return res.status(403).json({ error: 'Unauthorized access' });
-  }
-
-  try {
-    const users = db.prepare('SELECT id, email, name, created_at FROM users').all();
-    
-    // Check if a resumes table exists and fetch data
-    let resumes = [];
-    try {
-      resumes = db.prepare('SELECT * FROM resumes').all();
-    } catch (e) {
-      // resumes table might use a different name or structure
-    }
-
-    if (req.query.format === 'csv') {
-      let csv = 'ID,Name,Email,Created At\n';
-      users.forEach(u => {
-        csv += `"${u.id}","${u.name || ''}","${u.email}","${u.created_at || ''}"\n`;
-      });
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="candidates.csv"');
-      return res.send(csv);
-    }
-
-    return res.json({
-      total_candidates: users.length,
-      candidates: users,
-      resumes: resumes
-    });
-  } catch (err) {
-    console.error('Error fetching candidate records:', err);
-    return res.status(500).json({ error: 'Failed to retrieve database records' });
-  }
-});
-
 // Mount Admin Routes
-const adminRoutes = require('./routes/admin');
-app.use('/api/admin', adminRoutes);
+const adminRoutes = require("./routes/admin");
+app.use("/api/admin", adminRoutes);
