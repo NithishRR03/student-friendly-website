@@ -11,15 +11,17 @@ app.set('trust proxy', 1); // Render/Railway sit behind a proxy
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*').split(',').map((o) => o.trim());
 app.use(helmet({
-  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // needed for the Google sign-in popup
-  contentSecurityPolicy: { directives: {
-    defaultSrc: ["'self'"], objectSrc: ["'none'"],
-    scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
-    connectSrc: ["'self'", 'https://accounts.google.com/gsi/'],
-    frameSrc: ['https://accounts.google.com/gsi/'],
-    styleSrc: ["'self'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'],
-    fontSrc: ['https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:'], upgradeInsecureRequests: null,
-  } },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://accounts.google.com/gsi/client"],
+      frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://accounts.google.com/gsi/style"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+      connectSrc: ["'self'", "https://accounts.google.com/gsi/"]
+    }
+  }
 }));
 app.use(cors({ origin: allowedOrigins.includes('*') ? true : allowedOrigins }));
 app.use(express.json({ limit: '200kb' }));
