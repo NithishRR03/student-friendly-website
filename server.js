@@ -43,5 +43,5 @@ app.listen(PORT, () => console.log(`Student Friendly running on port ${PORT}`));
 
 // Mount Admin Routes
 const adminRoutes = require('./routes/admin');
-app.use("/api/admin", adminRoutes);
+//app.use("/api/admin", adminRoutes);
 app.use('/admin', adminRoutes);
