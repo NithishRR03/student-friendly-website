@@ -30,41 +30,25 @@
   </section>
 
   <section class="view" id="v-register" hidden>
-    <h2>Create your free profile</h2>
-    <p class="muted">Tell us a little about you and we'll suggest vacancies that fit.</p>
+    <h2>Finish your profile</h2>
+    <p class="muted">Signed in with Google as <b id="gEmail"></b>. Tell us a little more so we can match vacancies to you.</p>
     <form id="regForm" class="stack">
       <label>Full name<input name="name" required maxlength="100" autocomplete="name"></label>
       <label>Phone number<input name="phone" type="tel" required maxlength="25" autocomplete="tel" placeholder="+44 7000 000000"></label>
-      <label>Email<input name="email" type="email" required autocomplete="email"></label>
       <label>Course<input name="course" required maxlength="150" placeholder="e.g. MSc Data Science, UCL"></label>
       <label>Job field you're interested in<input name="job_field" list="fields" required maxlength="150" placeholder="Start typing…"></label>
       <datalist id="fields"><option value="Software & IT"><option value="Data & AI"><option value="Engineering"><option value="Finance & Accounting"><option value="Marketing"><option value="Sales"><option value="HR"><option value="Healthcare"><option value="Design"><option value="Operations & Logistics"><option value="Education"><option value="Law"></datalist>
       <label class="check"><input type="checkbox" id="consent"><span>I agree to the <a href="#/privacy">privacy policy</a> and to Student Friendly storing my name, phone, email, course and job interest to suggest vacancies and write my resume and LinkedIn content.</span></label>
-      <button class="btn" type="submit">Create profile &amp; email me a code</button>
+      <button class="btn" type="submit">Create my profile</button>
       <p class="msg" id="regMsg"></p>
     </form>
-    <p class="muted">Already registered? <a href="#/login">Log in</a></p>
   </section>
 
   <section class="view" id="v-login" hidden>
-    <h2>Log in</h2>
-    <p class="muted">Enter your email and we'll send a 6-digit code — no password needed.</p>
-    <form id="loginForm" class="stack">
-      <label>Email<input name="email" type="email" required autocomplete="email"></label>
-      <button class="btn" type="submit">Email me a code</button>
-      <p class="msg" id="loginMsg"></p>
-    </form>
-    <p class="muted">New here? <a href="#/register">Create a profile</a></p>
-  </section>
-
-  <section class="view" id="v-verify" hidden>
-    <h2>Check your email</h2>
-    <p class="muted">We sent a 6-digit code to <b id="vEmail"></b>. It expires in 10 minutes.</p>
-    <form id="verifyForm" class="stack">
-      <label>Code<input id="code" inputmode="numeric" maxlength="6" pattern="\d{6}" required autocomplete="one-time-code"></label>
-      <button class="btn" type="submit">Log in</button>
-      <p class="msg" id="verifyMsg"></p>
-    </form>
+    <h2>Sign in</h2>
+    <p class="muted">Continue with your Google account. First time here? We'll ask a few quick questions next. No passwords, no codes.</p>
+    <div id="gbtn" class="gbtn"></div>
+    <p class="msg" id="loginMsg"></p>
   </section>
 
   <section class="view" id="v-account" hidden>
@@ -137,7 +121,7 @@
       <li><b>Resume and LinkedIn details</b> you choose to type in: education, experience, projects, skills, awards and similar.</li>
       <li><b>CV text</b> you paste for a CV check. We do not store the text itself, only its word count and the type of suggestion given.</li>
       <li><b>Your checklist ticks</b> and search words (used to fetch results, not stored against your profile).</li>
-      <li><b>Technical data:</b> one-time login codes (kept hashed for 10 minutes), a login session (30 days) and your IP address in short-term server logs, used for security and to limit abuse.</li>
+      <li><b>Technical data:</b> a login session (30 days, stored hashed) and your IP address in short-term server logs, used for security and to limit abuse.</li>
     </ul>
     <h3>Why we use it, and our legal basis</h3>
     <ul>
@@ -149,18 +133,18 @@
     <ul>
       <li><b>AI provider</b> (Anthropic or OpenAI, depending on how the service is set up): receives your course, job field, search words and the resume or CV details you submit, so it can write suggestions. We do not send your name, phone number or email address. Anything you type in free text (for example an employer’s name) is included.</li>
       <li><b>Adzuna</b> (vacancy data): receives the keywords and location you search for.</li>
-      <li><b>Email provider</b> (Resend): receives your email address to deliver login codes.</li>
+      <li><b>Google</b> (Sign in with Google): confirms who you are. We receive your name and verified email address from Google; we never see your Google password.</li>
       <li><b>Hosting provider</b> (for example Render): stores the website and database.</li>
     </ul>
     <p>Some of these providers may process data outside the UK. Where they do, we rely on recognised safeguards such as the UK’s adequacy regulations, the International Data Transfer Agreement or standard contractual clauses.</p>
     <h3>How long we keep it</h3>
-    <p>Until you delete your account. Deleting it (Account → Delete my account) permanently removes your profile, resume details, checklist and history. Login codes expire after 10 minutes and sessions after 30 days. Hosting logs are kept briefly by our hosting provider.</p>
+    <p>Until you delete your account. Deleting it (Account → Delete my account) permanently removes your profile, resume details, checklist and history. Login sessions expire after 30 days. Hosting logs are kept briefly by our hosting provider.</p>
     <h3>Your rights</h3>
     <p>You can access your data (Account → Download my data), correct it (edit your profile), delete it, restrict or object to our use of it, receive it in a portable format, and withdraw consent at any time. To use a right we cannot offer in the app, email us. You can also complain to the Information Commissioner’s Office at ico.org.uk.</p>
     <h3>Cookies and local storage</h3>
     <p>We do not use cookies, analytics or advertising trackers. Your browser stores one login token in local storage so you stay logged in; it is removed when you log out.</p>
     <h3>Security</h3>
-    <p>Login codes and session tokens are stored hashed, traffic is sent over HTTPS and requests are rate limited. No system is perfectly secure, so please tell us straight away if you notice a problem.</p>
+    <p>Session tokens are stored hashed, traffic is sent over HTTPS and requests are rate limited. No system is perfectly secure, so please tell us straight away if you notice a problem.</p>
     <h3>Age</h3>
     <p>Student Friendly is intended for people aged 16 or over.</p>
     <h3>Changes</h3>
@@ -170,6 +154,7 @@
 <div id="printArea"></div>
 
 <footer><div class="wrap">Student Friendly — a student pilot project. Free while in testing. We only use your details to suggest vacancies; delete them any time in your account. <a href="#/privacy">Privacy policy</a></div></footer>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="app.js"></script>
 </body>
 </html>

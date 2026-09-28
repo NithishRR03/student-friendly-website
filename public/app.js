@@ -3,7 +3,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const MSG = {
   invalid_email: 'Please enter a valid email.', missing_fields: 'Please fill in every field.', invalid_phone: 'Please enter a valid phone number.',
   consent_required: 'Please tick the consent box.', email_exists: 'That email is already registered — log in instead.',
-  bad_code: 'That code is wrong or has expired.', too_many_attempts: 'Too many attempts — request a new code.', not_logged_in: 'Please log in first.', add_details_first: 'Add some skills, education or experience first, then try again.',
+  bad_code: 'That code is wrong or has expired.', too_many_attempts: 'Too many attempts — request a new code.', not_logged_in: 'Please sign in first.', google_not_configured: 'Google sign-in is not set up yet.', bad_google_token: 'Google sign-in failed or timed out. Please try again.', email_not_verified: 'Your Google email is not verified.', add_details_first: 'Add some skills, education or experience first, then try again.',
 };
 const CHECKLIST = [
   ['c1', 'Photo, headline and banner filled in'], ['c2', "Headline says what you're looking for, not just your degree"],
@@ -29,11 +29,12 @@ async function api(path, opts = {}) {
 function drawNav() {
   $('#navAuth').innerHTML = user
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
-    : '<a href="#/login">Log in</a><a class="btn sm" href="#/register">Sign up</a>';
+    : '<a class="btn sm" href="#/login">Sign in</a>';
 }
 function route() {
   let v = location.hash.replace(/^#\//, '') || 'home';
-  if (!['home', 'register', 'login', 'verify', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
+  if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
+  if (v === 'register' && !gCred) { location.hash = '#/login'; return; }
   if ((v === 'account' || v === 'tools' || v === 'builder') && !user) { location.hash = '#/login'; return; }
   $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   if (v === 'account') fillAccount();
@@ -52,7 +53,7 @@ function renderResults(d) {
       s.picks.map((p) => `<div class="pick"><b>${esc(p.title)}</b> · ${esc(p.company)}<p>${esc(p.reason)}</p></div>`).join('') +
       (s.advice ? `<p class="muted">${esc(s.advice)}</p>` : '') + '</div>';
   }
-  if (!user) h += '<p class="muted">✦ <a href="#/register">Sign up free</a> to get suggestions matched to your course and job field.</p>';
+  if (!user) h += '<p class="muted">✦ <a href="#/login">Sign in with Google</a> to get suggestions matched to your course and job field.</p>';
   h += d.jobs.length ? d.jobs.map((j) => `<article class="job"><h3>${esc(j.title)}</h3>
       <div class="meta">${esc(j.company)}${j.location ? ' · ' + esc(j.location) : ''}${j.field ? ' · ' + esc(j.field) : ''}</div>
       <p>${esc(j.description)}</p>${/^https?:\/\//.test(j.url || '') ? `<a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View &amp; apply →</a>` : ''}</article>`).join('')
@@ -67,30 +68,41 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Register / login (emailed code) ─────────────────────────────────
-function goVerify(email, devCode) {
-  pendingEmail = email; $('#vEmail').textContent = email; $('#verifyMsg').textContent = '';
-  $('#code').value = devCode || '';
-  location.hash = '#/verify';
+// ── Sign in with Google ─────────────────────────────────────────────
+let gCred = '';
+function initGoogle() {
+  fetch('/api/config').then((r) => r.json()).then((cfg) => {
+    if (!cfg.googleClientId) { say($('#loginMsg'), MSG.google_not_configured); return; }
+    let tries = 0;
+    const t = setInterval(() => {
+      if (window.google && google.accounts && google.accounts.id) {
+        clearInterval(t);
+        google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogle });
+        google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', width: 300 });
+      } else if (++tries > 50) { clearInterval(t); say($('#loginMsg'), 'Could not load Google sign-in. Check your connection and refresh.'); }
+    }, 200);
+  }).catch(() => {});
+}
+function finishSignIn(d) {
+  if (d.needs_profile) {
+    $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
+    location.hash = '#/register'; return;
+  }
+  setTok(d.token); user = d.user; gCred = ''; drawNav(); location.hash = '#/';
+}
+async function onGoogle(resp) {
+  gCred = resp.credential;
+  try { finishSignIn(await api('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential: gCred }) })); }
+  catch (err) { say($('#loginMsg'), errText(err)); }
 }
 $('#regForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target)); f.consent = $('#consent').checked;
-  try { const d = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(f) }); goVerify(f.email.trim().toLowerCase(), d.devCode); }
-  catch (err) { say($('#regMsg'), errText(err)); }
-});
-$('#loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = new FormData(e.target).get('email').trim().toLowerCase();
-  try { const d = await api('/api/auth/request-code', { method: 'POST', body: JSON.stringify({ email }) }); goVerify(email, d.devCode); }
-  catch (err) { say($('#loginMsg'), errText(err)); }
-});
-$('#verifyForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  try {
-    const d = await api('/api/auth/verify', { method: 'POST', body: JSON.stringify({ email: pendingEmail, code: $('#code').value }) });
-    setTok(d.token); user = d.user; drawNav(); location.hash = '#/';
-  } catch (err) { say($('#verifyMsg'), errText(err)); }
+  const f = Object.fromEntries(new FormData(e.target)); f.consent = $('#consent').checked; f.credential = gCred;
+  try { finishSignIn(await api('/api/auth/google', { method: 'POST', body: JSON.stringify(f) })); }
+  catch (err) {
+    say($('#regMsg'), errText(err));
+    if (err.message === 'bad_google_token') { gCred = ''; location.hash = '#/login'; }
+  }
 });
 
 // ── Account ─────────────────────────────────────────────────────────
@@ -107,6 +119,7 @@ $('#acctForm').addEventListener('submit', async (e) => {
 });
 $('#logoutBtn').addEventListener('click', async () => {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
+  try { google.accounts.id.disableAutoSelect(); } catch {}
   setTok(null); user = null; drawNav(); location.hash = '#/';
 });
 $('#exportBtn').addEventListener('click', async () => {
@@ -216,5 +229,5 @@ $('#kitOut').addEventListener('click', (e) => {
 
 (async function init() {
   if (tok()) { try { user = await api('/api/profile/me'); } catch { setTok(null); } }
-  drawNav(); route();
+  drawNav(); initGoogle(); route();
 })();

@@ -58,3 +58,5 @@ textarea.mono{font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:8px 0 1
 #printArea{display:none}
 @media print{body::before,body::after{display:none}body>*:not(#printArea){display:none!important}body{background:#fff}
 #printArea{display:block;white-space:pre-wrap;color:#000;font:11pt/1.35 Arial,Helvetica,sans-serif}}
+
+.gbtn{margin:22px 0 8px;min-height:44px}
