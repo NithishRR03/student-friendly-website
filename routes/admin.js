@@ -1,7 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
 const db = require('../db');
 
+// Serve the admin dashboard at /admin
+router.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin.html'));
+});
+
+// Admin data API endpoint
 router.get('/candidates', (req, res) => {
   const secretKey = req.query.key;
   const validKey = process.env.ADMIN_SECRET || 'studentadmin2026';

@@ -42,5 +42,9 @@ app.use((err, req, res, next) => { console.error(err); res.status(500).json({ er
 app.listen(PORT, () => console.log(`Student Friendly running on port ${PORT}`));
 
 // Mount Admin Routes
-const adminRoutes = require("./routes/admin");
+
 app.use("/api/admin", adminRoutes);
+
+// Mount dedicated Admin portal
+const adminRoutes = require('./routes/admin');
+app.use('/admin', adminRoutes);
