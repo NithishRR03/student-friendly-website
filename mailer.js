@@ -1,33 +1,20 @@
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
+// Sends login codes over HTTPS, which works on Render's free plan (Gmail SMTP does not).
 async function sendCode(email, code) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log(`[DEV] OTP code for ${email}: ${code}`);
+  const text = `Your Student Friendly login code is ${code}. It expires in 10 minutes. If you didn't ask for it, ignore this email.`;
+  if (process.env.BREVO_API_KEY) {
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: 'Student Friendly', email: process.env.MAIL_FROM_EMAIL },
+        to: [{ email }],
+        subject: 'Your Student Friendly login code',
+        textContent: text,
+      }),
+    });
+    if (!r.ok) throw new Error('brevo_' + r.status + ' ' + (await r.text()).slice(0, 200));
     return;
   }
-
-  await transporter.sendMail({
-    from: `"Student Friendly" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'Your Student Friendly Login Code',
-    text: `Your Student Friendly login code is: ${code}. It expires in 10 minutes. If you did not request this, please ignore this email.`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-        <h2 style="color: #111;">Student Friendly Login Code</h2>
-        <p>Use the code below to log in to your account:</p>
-        <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4F46E5; margin: 20px 0;">${code}</div>
-        <p style="color: #666; font-size: 13px;">This code expires in 10 minutes. If you didn't request this email, you can safely ignore it.</p>
-      </div>
-    `
-  });
+  console.log(`[DEV] login code for ${email}: ${code}`);
 }
-
 module.exports = { sendCode };
