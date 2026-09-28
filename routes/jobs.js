@@ -100,7 +100,7 @@ async function suggest(jobs, u, q) {
 router.get('/search', rateLimit({ windowMs: 60 * 1000, max: 10 }), optionalUser, async (req, res, next) => {
   try {
     const q = String(req.query.q || '').trim().slice(0, 100);
-    const where = String(req.query.where || '').trim().slice(0, 100);
+    const where = (String(req.query.where || "").trim().slice(0, 100)).replace(/^(uk|gb|united kingdom)$/i, "");
     const u = req.user;
     let jobs = null, source = 'adzuna';
     try { jobs = await adzuna(q || u?.job_field || '', where); } catch (e) { console.error(e.message); }
