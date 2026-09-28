@@ -44,6 +44,30 @@ async function adzuna(what, where) {
   }));
 }
 
+
+async function reed(what, where) {
+  const key = process.env.REED_API_KEY;
+  if (!key) return null;
+  const u = new URL("https://www.reed.co.uk/api/1.0/search");
+  if (what) u.searchParams.set("keywords", what);
+  if (where) u.searchParams.set("locationName", where);
+  u.searchParams.set("resultsToTake", "15");
+  const auth = "Basic " + Buffer.from(key + ":").toString("base64");
+  const r = await fetch(u, { headers: { Authorization: auth } });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const strip = (s) => String(s || "").replace(/<[^>]+>/g, "");
+  return (data.results || []).map((j) => ({
+    id: "reed_" + String(j.jobId),
+    title: strip(j.jobTitle),
+    company: j.employerName || "Company not listed",
+    location: j.locationName || "",
+    field: "",
+    description: strip(j.jobDescription).slice(0, 300),
+    url: j.jobUrl
+  }));
+}
+
 async function suggest(jobs, u, q) {
   if (!jobs.length) return { picks: [], advice: '', ai: false };
   const list = jobs.slice(0, 10);
