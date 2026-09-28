@@ -79,3 +79,7 @@ app.get('/api/admin/candidates', (req, res) => {
     return res.status(500).json({ error: 'Failed to retrieve database records' });
   }
 });
+
+// Mount Admin Routes
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
