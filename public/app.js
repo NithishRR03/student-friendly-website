@@ -1,29 +1,30 @@
 const $= (s) => document.querySelector(s),$$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MSG = {
-  invalid_email: 'Please enter a valid email.', missing_fields: 'Please fill in every field.', invalid_phone: 'Please enter a valid phone number.',
-  consent_required: 'Please tick the consent box.', email_exists: 'That email is already registered — log in instead.',
-  bad_code: 'That code is wrong or has expired.', too_many_attempts: 'Too many attempts — request a new code.', not_logged_in: 'Please sign in first.', google_not_configured: 'Google sign-in is not set up yet.', bad_google_token: 'Google sign-in failed or timed out. Please try again.', email_not_verified: 'Your Google email is not verified.', add_details_first: 'Add some skills, education or experience first, then try again.',
+  invalid_email: 'Please enter a valid email address.', missing_fields: 'Please fill in all fields.', invalid_phone: 'Please enter a valid phone number.',
+  email_exists: 'That email is already registered.', bad_code: 'That code is incorrect or has expired.',
+  too_many_attempts: 'Too many attempts — please wait a minute.', not_logged_in: 'Please sign in first.',
+  add_details_first: 'Add your skills or education first, then try again.',
 };
 const CHECKLIST = [
   ['c1', 'Photo, headline and banner filled in'], ['c2', "Headline says what you're looking for, not just your degree"],
   ['c3', 'About section in first person, 3–4 short paragraphs'], ['c4', 'Each experience has one measurable outcome'],
   ['c5', 'At least five relevant skills added and pinned'], ['c6', 'Custom LinkedIn URL set'],
 ];
-let user = null, pendingEmail = '';
+let user = null, pendingLoginEmail = '';
 
 const tok = () => { try { return localStorage.getItem('sf_session'); } catch { return null; } };
 const setTok = (t) => { try { t ? localStorage.setItem('sf_session', t) : localStorage.removeItem('sf_session'); } catch {} };
-const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
-const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute and try again.' : MSG[e.message] || 'Something went wrong — please try again.';
+const say = (el, t, ok) => { if (!el) return; el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
+const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute.' : MSG[e.message] || 'Something went wrong — please try again.';
 
-// Helper to verify candidate has completed mandatory fields
+// Verify that candidate has submitted phone, course, and job field
 function isProfileComplete(u) {
   if (!u) return false;
-  const hasPhone = Boolean(u.phone && u.phone !== '-' && u.phone.trim().length >= 7);
-  const hasCourse = Boolean(u.course && u.course !== '-' && u.course.trim().length > 0);
-  const hasJobField = Boolean(u.job_field && u.job_field !== '-' && u.job_field.trim().length > 0);
-  return hasPhone && hasCourse && hasJobField;
+  const p = (u.phone || '').trim();
+  const c = (u.course || '').trim();
+  const j = (u.job_field || '').trim();
+  return Boolean(p && p !== '-' && p.length >= 7 && c && c !== '-' && j && j !== '-');
 }
 
 async function api(path, opts = {}) {
@@ -35,30 +36,29 @@ async function api(path, opts = {}) {
   return body;
 }
 
-function drawNav() {
+function updateNavigation() {
+  const complete = isProfileComplete(user);
+  
+  // Hide top navigation services until mandatory details are filled
+  const topNav = $('#topNav');
+  if (topNav) {
+    const serviceLinks = topNav.querySelectorAll('a:not(#navAuth a)');
+    serviceLinks.forEach(link => {
+      link.style.display = (!user || complete) ? '' : 'none';
+    });
+  }
+
   $('#navAuth').innerHTML = user
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
-}
 
-function route() {
-  let v = location.hash.replace(/^#\//, '') || 'home';
-  if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
-  if (v === 'register' && !gCred) { location.hash = '#/login'; return; }
-  if ((v === 'account' || v === 'tools' || v === 'builder') && !user) { location.hash = '#/login'; return; }
+  const findJobsBtn = $('#findJobsBtn');   if (findJobsBtn) {     findJobsBtn.hidden = !complete;   } }  function route() {   let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';   if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';   if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) { location.hash = '#/login'; return; }    // Strict route locking: user cannot navigate to any feature until profile is completed   if (user && !isProfileComplete(user) && v !== 'account') {     location.hash = '#/account';     return;   }    $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  updateNavigation();
 
-  // Mandatory gate: If logged in but profile is not completed, lock them to the profile page
-  if (user && !isProfileComplete(user) && v !== 'account' && v !== 'privacy') {
-    location.hash = '#/account';
-    return;
-  }
-
-  $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
-  if (v === 'login') initGoogle();
   if (v === 'account') {
     fillAccount();
     if (user && !isProfileComplete(user)) {
-      say($('#acctMsg'), 'Please provide your mobile number, course, and job field to continue.', false);
+      say($('#acctMsg'), '⚠️ Mandatory: Please enter your Phone Number, Course, and Job Field to unlock services.', false);
     }
   }
   if (v === 'tools') loadChecklist();
@@ -67,7 +67,7 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
-// ── Search + AI suggestions ─────────────────────────────────────────
+// ── Search ──────────────────────────────────────────────────────────
 function renderResults(d) {
   const s = d.suggestions;
   let h = '';
@@ -76,14 +76,14 @@ function renderResults(d) {
       s.picks.map((p) => `<div class="pick"><b>${esc(p.title)}</b> · ${esc(p.company)}<p>${esc(p.reason)}</p></div>`).join('') +
       (s.advice ? `<p class="muted">${esc(s.advice)}</p>` : '') + '</div>';
   }
-  if (!user) h += '<p class="muted">✦ <a href="#/login">Sign in with Google</a> to get suggestions matched to your course and job field.</p>';
+  if (!user) h += '<p class="muted">✦ <a href="#/login">Sign in</a> to get recommendations matched to your course and field.</p>';
   h += d.jobs.length ? d.jobs.map((j) => `<article class="job"><h3>${esc(j.title)}</h3>
       <div class="meta">${esc(j.company)}${j.location ? ' · ' + esc(j.location) : ''}${j.field ? ' · ' + esc(j.field) : ''}</div>
       <p>${esc(j.description)}</p>${/^https?:\/\//.test(j.url || '') ? `<a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View &amp; apply →</a>` : ''}</article>`).join('')
     : '<p class="muted">No vacancies matched. Try a broader keyword.</p>';
-  if (d.source === 'sample') h += '<p class="muted small">Demo mode: these are fictional sample listings. Connect a live jobs source (see README) to show real vacancies.</p>';
   $('#results').innerHTML = h;
 }
+
 $('#searchForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('#results').innerHTML = '<p class="muted">Searching…</p>';
@@ -91,126 +91,104 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Sign in with Google (Hardcoded Active Client ID) ────────────────
-let gCred = '';
-
-function initGoogle() {
-  const clientId = '498027471861-mvjkbek8r3rv7gdknetps100vga3eiip.apps.googleusercontent.com';
-
-  let tries = 0;
-  const t = setInterval(() => {
-    if (window.google && google.accounts && google.accounts.id) {
-      clearInterval(t);
-      google.accounts.id.initialize({
-        client_id: clientId,
-        callback: onGoogle,
-        auto_select: false,
-        itp_support: true
-      });
-      
-      const gbtn = $('#gbtn');
-      if (gbtn) {
-        gbtn.innerHTML = '';
-        google.accounts.id.renderButton(gbtn, {
-          theme: 'outline',
-          size: 'large',
-          type: 'standard',
-          shape: 'rectangular',
-          text: 'signin_with',
-          logo_alignment: 'left'
-        });
-      }
-    } else if (++tries > 50) {
-      clearInterval(t);
-      const msg = $('#loginMsg');
-      if (msg) say(msg, MSG.bad_google_token);
-    }
-  }, 100);
-}
-
-function finishSignIn(d) {
-  if (d.needs_profile) {
-    $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
-    location.hash = '#/register'; return;
-  }
-  setTok(d.token); 
-  user = d.user; 
-  gCred = ''; 
-  drawNav(); 
-
-  // Force candidate to complete profile immediately after Google Sign-In
-  if (!isProfileComplete(user)) {
-    location.hash = '#/account';
-  } else {
-    location.hash = '#/';
-  }
-}
-
-async function onGoogle(resp) {
-  gCred = resp.credential;
-  try { finishSignIn(await api('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential: gCred }) })); }
-  catch (err) { say($('#loginMsg'), errText(err)); }
-}
-
-$('#regForm').addEventListener('submit', async (e) => {
+// ── Email / Phone OTP Authentication ────────────────────────────────
+$('#otpReqForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target)); f.consent = $('#consent').checked; f.credential = gCred;
-  try { finishSignIn(await api('/api/auth/google', { method: 'POST', body: JSON.stringify(f) })); }
-  catch (err) {
-    say($('#regMsg'), errText(err));
-    if (err.message === 'bad_google_token') { gCred = ''; location.hash = '#/login'; }
+  const email = $('#loginEmail').value.trim();
+  say($('#loginMsg'), 'Sending verification code…', true);
+
+  try {
+    await api('/api/auth/send-otp', { method: 'POST', body: JSON.stringify({ email }) });
+    pendingLoginEmail = email;
+    $('#otpReqForm').hidden = true;
+    $('#otpVerifyForm').hidden = false;
+    say($('#loginMsg'), `A 6-digit code was sent to ${email}`, true);
+  } catch (err) {
+    say($('#loginMsg'), errText(err));
   }
 });
 
-// ── Account ─────────────────────────────────────────────────────────
+$('#otpVerifyForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = $('#loginOtp').value.trim();
+  say($('#loginMsg'), 'Verifying…', true);
+
+  try {
+    const res = await api('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email: pendingLoginEmail, code })
+    });
+    setTok(res.token);
+    user = res.user;
+    updateNavigation();
+
+    if (!isProfileComplete(user)) {
+      location.hash = '#/account';
+    } else {
+      location.hash = '#/';
+    }
+  } catch (err) {
+    say($('#loginMsg'), errText(err));
+  }
+});
+
+$('#btnResend').addEventListener('click', () => {
+  $('#otpVerifyForm').hidden = true;
+  $('#otpReqForm').hidden = false;
+  $('#loginMsg').textContent = '';
+});
+
+// ── Account / Candidate Profile ─────────────────────────────────────
 function fillAccount() {
   $('#acctEmail').textContent = user.email;
   for (const k of ['name', 'phone', 'course', 'job_field']) {
-    const val = user[k] === '-' ? '' : (user[k] || '');
+    const val = (user[k] === '-' || !user[k]) ? '' : user[k];
     if ($('#acctForm').elements[k]) $('#acctForm').elements[k].value = val;
   }
 }
 
 $('#acctForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const formPayload = Object.fromEntries(new FormData(e.target));
+  const f = Object.fromEntries(new FormData(e.target));
   
-  if (!formPayload.phone || formPayload.phone.trim().length < 7) {
-    say($('#acctMsg'), 'Please enter a valid mobile number.', false);
+  if (!f.phone || f.phone.trim().length < 7) {
+    say($('#acctMsg'), 'Please enter a valid phone number (at least 7 digits).', false);
+    return;
+  }
+  if (!f.course || f.course.trim().length === 0) {
+    say($('#acctMsg'), 'Please specify your course / degree.', false);
+    return;
+  }
+  if (!f.job_field || f.job_field.trim().length === 0) {
+    say($('#acctMsg'), 'Please specify your target job field.', false);
     return;
   }
 
   try {
-    await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(formPayload) });
-    user = { ...user, ...formPayload };
-    drawNav(); 
-    say($('#acctMsg'), 'Profile completed! Redirecting to jobs…', true);
-    
-    // Once saved, unlock access and direct candidate to jobs
+    await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(f) });
+    user = { ...user, ...f };
+    updateNavigation();
+    say($('#acctMsg'), 'Details saved successfully! Unlocking services…', true);
+
     setTimeout(() => {
       location.hash = '#/';
-    }, 900);
-  } catch (err) { 
-    say($('#acctMsg'), errText(err)); 
+    }, 1000);
+  } catch (err) {
+    say($('#acctMsg'), errText(err));
   }
 });
 
 $('#logoutBtn').addEventListener('click', async () => {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
-  try { google.accounts.id.disableAutoSelect(); } catch {}
-  setTok(null); user = null; drawNav(); location.hash = '#/';
-});
-$('#exportBtn').addEventListener('click', async () => {
-  const d = await api('/api/gdpr/export');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })); a.download = 'my-data.json'; a.click();
-});
-$('#deleteBtn').addEventListener('click', async () => {
-  if (!confirm('Permanently delete your account and all your data? This cannot be undone.')) return;
-  await api('/api/profile/me', { method: 'DELETE' }); setTok(null); user = null; drawNav(); location.hash = '#/';
+  setTok(null); user = null; updateNavigation(); location.hash = '#/';
 });
 
-// ── CV check + LinkedIn checklist ───────────────────────────────────
+$('#deleteBtn').addEventListener('click', async () => {
+  if (!confirm('Permanently delete your account and profile data?')) return;
+  await api('/api/profile/me', { method: 'DELETE' }); setTok(null); user = null; updateNavigation(); location.hash = '#/';
+});
+
+// ── CV Tools & Checklist ───────────────────────────────────────────
 $('#cvForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const out = $('#cvOut'); out.hidden = false; out.innerHTML = '<p class="muted">Checking…</p>';
@@ -219,6 +197,7 @@ $('#cvForm').addEventListener('submit', async (e) => {
     out.innerHTML = `<div class="tag">Top suggestion: ${esc(r.tag)}</div><p>${esc(r.suggestion)}</p>`;
   } catch (err) { out.innerHTML = `<p class="msg err">${err.message === 'cv_text_too_short' ? 'Paste a bit more of your CV first.' : 'Could not check right now.'}</p>`; }
 });
+
 async function loadChecklist() {
   let state = {};
   try { state = (await api('/api/checklist')).state; } catch {}
@@ -231,15 +210,16 @@ $('#checklist').addEventListener('change', async (e) => {
   try { await api('/api/checklist/' + e.target.id, { method: 'PUT', body: JSON.stringify({ checked: e.target.checked }) }); } catch {}
 });
 
-// ── Resume + LinkedIn builder ───────────────────────────────────────
+// ── Resume & LinkedIn Builder ───────────────────────────────────────
 const SEC = {
-  edu: { title: 'Education', f: [['school', 'School / university'], ['degree', 'Degree and course'], ['dates', 'Dates (e.g. 2023–2026)'], ['details', 'Modules, grade, dissertation, achievements', 1]] },
-  exp: { title: 'Experience (jobs, internships, volunteering)', f: [['role', 'Job title'], ['company', 'Company'], ['dates', 'Dates'], ['details', 'What did you do? Rough notes are fine — include numbers if you have them.', 1]] },
-  proj: { title: 'Projects', f: [['name', 'Project name'], ['link', 'Link (optional)'], ['details', 'What you built or did, and the result', 1]] },
+  edu: { title: 'Education', f: [['school', 'School / university'], ['degree', 'Degree and course'], ['dates', 'Dates'], ['details', 'Modules, grade, dissertation, achievements', 1]] },
+  exp: { title: 'Experience (jobs, internships, volunteering)', f: [['role', 'Job title'], ['company', 'Company'], ['dates', 'Dates'], ['details', 'What did you do? Include metrics if possible.', 1]] },
+  proj: { title: 'Projects', f: [['name', 'Project name'], ['link', 'Link (optional)'], ['details', 'What you built or achieved', 1]] },
 };
 let bData = {}, copies = [];
 const entryHtml = (sec, o = {}) => `<div class="entry">${SEC[sec].f.map(([k, l, t]) => `<label>${l}${t
-  ? `<textarea data-k="${k}" rows="3" maxlength="1500">${esc(o[k])}</textarea>` : `<input data-k="${k}" maxlength="150" value="${esc(o[k])}">`}</label>`).join('')}<button type="button" class="btn ghost sm" data-rm>Remove</button></div>`;
+  ? `<textarea data-k="${k}" rows="3">${esc(o[k])}</textarea>` : `<input data-k="${k}" value="${esc(o[k])}">`}</label>`).join('')}<button type="button" class="btn ghost sm" data-rm>Remove</button></div>`;
+
 function buildSecs() {
   $('#secs').innerHTML = Object.keys(SEC).map((s) => `<fieldset><legend>${SEC[s].title}</legend><div data-list="${s}">${((bData[s] && bData[s].length) ? bData[s] : [{}]).map((o) => entryHtml(s, o)).join('')}</div><button type="button" class="btn ghost sm" data-add="${s}">+ Add another</button></fieldset>`).join('');
 }
@@ -254,6 +234,7 @@ function collect() {
   return d;
 }
 async function saveBuilder() { bData = (await api('/api/resume/data', { method: 'PUT', body: JSON.stringify(collect()) })).data; }
+
 $('#secs').addEventListener('click', (e) => {
   const add = e.target.closest('[data-add]'), rm = e.target.closest('[data-rm]');
   if (add) $(`[data-list="${add.dataset.add}"]`).insertAdjacentHTML('beforeend', entryHtml(add.dataset.add));
@@ -283,12 +264,11 @@ $('#rPrint').addEventListener('click', () => { $('#printArea').textContent = $('
 function renderKit(k) {
   copies = [];
   const blk = (t, text) => { copies.push(text); return `<div class="panel"><div class="tag">${esc(t)}</div><pre class="out">${esc(text)}</pre><button class="btn ghost sm" data-copy="${copies.length - 1}" type="button">Copy</button></div>`; };
-  let h = `<h2 class="gap">Your LinkedIn kit</h2><p class="muted small">${k.ai ? 'Written by AI from your details' : 'Built from your details'} — edit anything that isn't quite you before pasting it into LinkedIn.</p>`;
+  let h = `<h2 class="gap">Your LinkedIn kit</h2><p class="muted small">${k.ai ? 'Written by AI from your details' : 'Built from your details'}</p>`;
   k.headlines.forEach((x, i) => { h += blk('Headline option ' + (i + 1), x); });
   h += blk('About (your bio)', k.about);
   if (k.pinned.length) h += blk('Pin these 3 skills', k.pinned.join('\n'));
   if (k.skills.length) h += blk('Skills to add', k.skills.join('\n'));
-  if (k.suggested.length) h += blk('Also add these — only if you genuinely have them', k.suggested.join('\n'));
   for (const [key, label] of [['experience', 'Experience'], ['education', 'Education'], ['projects', 'Project']]) k[key].forEach((x) => { if (x.description) h += blk(`${label}: ${x.title}`, x.description); });
   if (k.tips.length) h += `<div class="panel"><div class="tag">Profile tips</div><ul>${k.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
   $('#kitOut').innerHTML = h;
@@ -303,6 +283,7 @@ $('#kitOut').addEventListener('click', (e) => {
   if (b) navigator.clipboard.writeText(copies[b.dataset.copy]).then(() => flash(b, 'Copied'));
 });
 
+// App Entry
 (async function init() {
   if (tok()) { 
     try { 
@@ -311,7 +292,6 @@ $('#kitOut').addEventListener('click', (e) => {
       setTok(null); 
     } 
   }
-  drawNav(); 
-  initGoogle(); 
+  updateNavigation(); 
   route();
 })();
