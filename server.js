@@ -55,6 +55,7 @@ app.get('/admin', (req, res) => {
 
   // Fetch all student records
   try {
+   // Fetch ALL registered users, regardless of whether they have resume data yet
     const rows = db.prepare(`
       SELECT 
         u.id,
@@ -63,11 +64,12 @@ app.get('/admin', (req, res) => {
         u.phone,
         u.course,
         u.job_field,
+        u.created_at,
         u.consent_at,
         r.data AS resume_data
       FROM users u
       LEFT JOIN resume_data r ON u.id = r.user_id
-      ORDER BY u.consent_at DESC
+      ORDER BY u.id DESC
     `).all();
 
     const students = rows.map(u => {
