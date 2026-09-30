@@ -20,6 +20,7 @@ db.exec(`
     phone TEXT,
     course TEXT,
     job_field TEXT,
+    location TEXT,
     consent_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -44,5 +45,12 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// Safely add the location column to existing databases without breaking them
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN location TEXT DEFAULT '-'`);
+} catch (e) {
+  // Column already exists, do nothing
+}
 
 module.exports = db;
