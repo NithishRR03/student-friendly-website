@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
 const nodemailer = require('nodemailer');
-const db = require('../db');
+const db = require('../db.js');
 
 const router = express.Router();
 
