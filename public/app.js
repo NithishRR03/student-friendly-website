@@ -17,13 +17,13 @@ const setTok = (t) => { try { t ? localStorage.setItem('sf_session', t) : localS
 const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
 const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute and try again.' : MSG[e.message] || 'Something went wrong — please try again.';
 
-// Helper to verify candidate has completed mandatory fields
+// Check if candidate has completed all required fields
 function isProfileComplete(u) {
   if (!u) return false;
-  const hasPhone = Boolean(u.phone && u.phone !== '-' && u.phone.trim().length >= 7);
-  const hasCourse = Boolean(u.course && u.course !== '-' && u.course.trim().length > 0);
-  const hasJobField = Boolean(u.job_field && u.job_field !== '-' && u.job_field.trim().length > 0);
-  return hasPhone && hasCourse && hasJobField;
+  const p = (u.phone || '').trim();
+  const c = (u.course || '').trim();
+  const j = (u.job_field || '').trim();
+  return Boolean(p && p !== '-' && p.length >= 7 && c && c !== '-' && j && j !== '-');
 }
 
 async function api(path, opts = {}) {
@@ -35,30 +35,32 @@ async function api(path, opts = {}) {
   return body;
 }
 
-function drawNav() {
+function updateNavigation() {
+  const complete = isProfileComplete(user);
+  
+  // Hide top navigation links if profile is incomplete
+  const topNav = $('#topNav');
+  if (topNav) {
+    const serviceLinks = topNav.querySelectorAll('a:not(#navAuth a)');
+    serviceLinks.forEach(link => {
+      link.style.display = (!user || complete) ? '' : 'none';
+    });
+  }
+
+  // Update Auth indicator
   $('#navAuth').innerHTML = user
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
-}
 
-function route() {
-  let v = location.hash.replace(/^#\//, '') || 'home';
-  if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
-  if (v === 'register' && !gCred) { location.hash = '#/login'; return; }
-  if ((v === 'account' || v === 'tools' || v === 'builder') && !user) { location.hash = '#/login'; return; }
+  // Toggle "Find matching jobs" button in profile view
+  const findJobsBtn = $('#findJobsBtn');   if (findJobsBtn) {     findJobsBtn.hidden = !complete;   } }  function route() {   let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';   if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';   if (v === 'register' && !gCred) { location.hash = '#/login'; return; }   if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) { location.hash = '#/login'; return; }    // Strict enforcement: candidate MUST fill out profile before accessing any service   if (user && !isProfileComplete(user) && v !== 'account' && v !== 'privacy') {     location.hash = '#/account';     return;   }    $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  updateNavigation();
 
-  // Mandatory gate: If logged in but profile is not completed, lock them to the profile page
-  if (user && !isProfileComplete(user) && v !== 'account' && v !== 'privacy') {
-    location.hash = '#/account';
-    return;
-  }
-
-  $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   if (v === 'login') initGoogle();
   if (v === 'account') {
     fillAccount();
     if (user && !isProfileComplete(user)) {
-      say($('#acctMsg'), 'Please provide your mobile number, course, and job field to continue.', false);
+      say($('#acctMsg'), '⚠️ Mandatory: Please enter your Phone Number, Course, and Job Field before you can use any services.', false);
     }
   }
   if (v === 'tools') loadChecklist();
@@ -81,7 +83,6 @@ function renderResults(d) {
       <div class="meta">${esc(j.company)}${j.location ? ' · ' + esc(j.location) : ''}${j.field ? ' · ' + esc(j.field) : ''}</div>
       <p>${esc(j.description)}</p>${/^https?:\/\//.test(j.url || '') ? `<a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">View &amp; apply →</a>` : ''}</article>`).join('')
     : '<p class="muted">No vacancies matched. Try a broader keyword.</p>';
-  if (d.source === 'sample') h += '<p class="muted small">Demo mode: these are fictional sample listings. Connect a live jobs source (see README) to show real vacancies.</p>';
   $('#results').innerHTML = h;
 }
 $('#searchForm').addEventListener('submit', async (e) => {
@@ -130,15 +131,17 @@ function initGoogle() {
 
 function finishSignIn(d) {
   if (d.needs_profile) {
-    $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
-    location.hash = '#/register'; return;
+    $('#gEmail').textContent = d.email; 
+    $('#regForm').elements['name'].value = d.name || '';
+    location.hash = '#/register'; 
+    return;
   }
   setTok(d.token); 
   user = d.user; 
   gCred = ''; 
-  drawNav(); 
+  updateNavigation();
 
-  // Force candidate to complete profile immediately after Google Sign-In
+  // Enforce mandatory profile check immediately upon Google Login
   if (!isProfileComplete(user)) {
     location.hash = '#/account';
   } else {
@@ -162,11 +165,11 @@ $('#regForm').addEventListener('submit', async (e) => {
   }
 });
 
-// ── Account ─────────────────────────────────────────────────────────
+// ── Profile View ────────────────────────────────────────────────────
 function fillAccount() {
   $('#acctEmail').textContent = user.email;
   for (const k of ['name', 'phone', 'course', 'job_field']) {
-    const val = user[k] === '-' ? '' : (user[k] || '');
+    const val = (user[k] === '-' || !user[k]) ? '' : user[k];
     if ($('#acctForm').elements[k]) $('#acctForm').elements[k].value = val;
   }
 }
@@ -176,20 +179,28 @@ $('#acctForm').addEventListener('submit', async (e) => {
   const formPayload = Object.fromEntries(new FormData(e.target));
   
   if (!formPayload.phone || formPayload.phone.trim().length < 7) {
-    say($('#acctMsg'), 'Please enter a valid mobile number.', false);
+    say($('#acctMsg'), 'Please enter a valid phone number (at least 7 digits).', false);
+    return;
+  }
+  if (!formPayload.course || formPayload.course.trim().length === 0) {
+    say($('#acctMsg'), 'Please enter your course.', false);
+    return;
+  }
+  if (!formPayload.job_field || formPayload.job_field.trim().length === 0) {
+    say($('#acctMsg'), 'Please select or enter your job field.', false);
     return;
   }
 
   try {
     await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(formPayload) });
     user = { ...user, ...formPayload };
-    drawNav(); 
-    say($('#acctMsg'), 'Profile completed! Redirecting to jobs…', true);
+    updateNavigation();
+    say($('#acctMsg'), 'Details saved successfully! Unlocking services…', true);
     
-    // Once saved, unlock access and direct candidate to jobs
+    // Redirect to home/jobs view once details are complete
     setTimeout(() => {
       location.hash = '#/';
-    }, 900);
+    }, 1000);
   } catch (err) { 
     say($('#acctMsg'), errText(err)); 
   }
@@ -198,16 +209,12 @@ $('#acctForm').addEventListener('submit', async (e) => {
 $('#logoutBtn').addEventListener('click', async () => {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
   try { google.accounts.id.disableAutoSelect(); } catch {}
-  setTok(null); user = null; drawNav(); location.hash = '#/';
+  setTok(null); user = null; updateNavigation(); location.hash = '#/';
 });
-$('#exportBtn').addEventListener('click', async () => {
-  const d = await api('/api/gdpr/export');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })); a.download = 'my-data.json'; a.click();
-});
+
 $('#deleteBtn').addEventListener('click', async () => {
   if (!confirm('Permanently delete your account and all your data? This cannot be undone.')) return;
-  await api('/api/profile/me', { method: 'DELETE' }); setTok(null); user = null; drawNav(); location.hash = '#/';
+  await api('/api/profile/me', { method: 'DELETE' }); setTok(null); user = null; updateNavigation(); location.hash = '#/';
 });
 
 // ── CV check + LinkedIn checklist ───────────────────────────────────
@@ -311,7 +318,7 @@ $('#kitOut').addEventListener('click', (e) => {
       setTok(null); 
     } 
   }
-  drawNav(); 
+  updateNavigation(); 
   initGoogle(); 
   route();
 })();
