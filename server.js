@@ -103,7 +103,7 @@ app.get('/admin', (req, res) => {
       const hasCV = Boolean(cvContent && cvContent.trim().length > 10);
 
       return {
-        id: u.id,
+        id: u.id || '-',
         name: u.name || 'Student #' + (u.id || ''),
         email: u.email || '-',
         phone: u.phone || parsed.phone || '-',
@@ -112,7 +112,7 @@ app.get('/admin', (req, res) => {
         linkedin: parsed.linkedin || 'None',
         has_cv: hasCV,
         cv_text: cvContent || 'Not generated yet',
-        signed_up: u.consent_at || 'Registered'
+        signed_up: u.consent_at || u.created_at || 'Registered'
       };
     });
 
@@ -131,9 +131,10 @@ app.get('/admin', (req, res) => {
       return res.send(JSON.stringify(cvStudents, null, 2));
     }
 
-    // Build Tab 1 Table: All Signups
+    // Build Tab 1 Table: All Signups (includes Student ID)
     const allRowsHtml = allStudents.map(s => `
       <tr>
+        <td><code style="color:#38bdf8;font-size:12px;">${s.id}</code></td>
         <td><strong>${s.name}</strong></td>
         <td>${s.email}</td>
         <td>${s.phone}</td>
@@ -147,6 +148,7 @@ app.get('/admin', (req, res) => {
     // Build Tab 2 Table: CV Generated Students Only
     const cvRowsHtml = cvStudents.map(s => `
       <tr>
+        <td><code style="color:#38bdf8;font-size:12px;">${s.id}</code></td>
         <td><strong>${s.name}</strong></td>
         <td>${s.email}</td>
         <td>${s.phone}</td>
@@ -165,7 +167,7 @@ app.get('/admin', (req, res) => {
         <title>Student Friendly Admin Dashboard</title>
         <style>
           body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 25px; margin: 0; }
-          .container { max-width: 1250px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+          .container { max-width: 1350px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
           .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
           h2 { color: #38bdf8; margin: 0; }
           .actions { display: flex; gap: 10px; }
@@ -211,6 +213,7 @@ app.get('/admin', (req, res) => {
             <table>
               <thead>
                 <tr>
+                  <th>Student ID</th>
                   <th>Student Name</th>
                   <th>Email</th>
                   <th>Phone</th>
@@ -221,7 +224,7 @@ app.get('/admin', (req, res) => {
                 </tr>
               </thead>
               <tbody>
-                ${allRowsHtml.length > 0 ? allRowsHtml : '<tr><td colspan="7" style="text-align:center;padding:24px;color:#94a3b8;">No registered users found yet.</td></tr>'}
+                ${allRowsHtml.length > 0 ? allRowsHtml : '<tr><td colspan="8" style="text-align:center;padding:24px;color:#94a3b8;">No registered users found yet.</td></tr>'}
               </tbody>
             </table>
           ` : `
@@ -229,6 +232,7 @@ app.get('/admin', (req, res) => {
             <table>
               <thead>
                 <tr>
+                  <th>Student ID</th>
                   <th>Student Name</th>
                   <th>Email</th>
                   <th>Phone</th>
@@ -238,7 +242,7 @@ app.get('/admin', (req, res) => {
                 </tr>
               </thead>
               <tbody>
-                ${cvRowsHtml.length > 0 ? cvRowsHtml : '<tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8;">No students have generated a CV yet.</td></tr>'}
+                ${cvRowsHtml.length > 0 ? cvRowsHtml : '<tr><td colspan="7" style="text-align:center;padding:24px;color:#94a3b8;">No students have generated a CV yet.</td></tr>'}
               </tbody>
             </table>
           `}
