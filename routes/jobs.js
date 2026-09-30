@@ -4,7 +4,7 @@
 // Suggestions come from Claude/OpenAI when a key is set; otherwise a keyword matcher.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { optionalUser } = require('../auth');
+const { requireUser } = require('../auth'); // Fixed missing import
 const { llm } = require('../llm');
 const router = express.Router();
 
@@ -43,7 +43,6 @@ async function adzuna(what, where) {
     description: strip(j.description).slice(0, 300), url: j.redirect_url,
   }));
 }
-
 
 async function reed(what, where) {
   const key = process.env.REED_API_KEY;
@@ -97,7 +96,8 @@ async function suggest(jobs, u, q) {
   return { picks, advice: u ? '' : 'Sign up and we will match vacancies to your course and job field.', ai: false };
 }
 
-router.get('/search', rateLimit({ windowMs: 60 * 1000, max: 10 }), optionalUser, async (req, res, next) => {
+// Fixed the route middleware here to use requireUser instead of the undefined optionalUser
+router.get('/search', rateLimit({ windowMs: 60 * 1000, max: 10 }), requireUser, async (req, res, next) => {
   try {
     const q = String(req.query.q || '').trim().slice(0, 100);
     const where = (String(req.query.where || "").trim().slice(0, 100)).replace(/^(uk|gb|united kingdom)$/i, "");
