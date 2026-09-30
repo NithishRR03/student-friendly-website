@@ -32,12 +32,40 @@ app.use('/api/checklist', require('./routes/checklist'));
 app.use('/api/cv', require('./routes/cv'));
 app.use('/api/gdpr', require('./routes/gdpr'));
 
-// --- SECURED ADMIN PORTAL (NATIVE BROWSER LOGIN) ---
+// --- SECURED ADMIN PORTAL (WITH LOGOUT OPTION) ---
 app.get('/admin', (req, res) => {
   const adminId = 'SFUK';
   const adminPass = 'Tamilpasanga$3';
 
-  // Check HTTP Basic Authorization header
+  // 1. Check if user clicked Logout
+  if (req.query.logout === '1') {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Student Friendly Admin Area"');
+    return res.status(401).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Logged Out</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #1e293b; padding: 30px; border-radius: 10px; text-align: center; max-width: 360px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+          h2 { color: #38bdf8; margin-top: 0; }
+          p { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+          a { background: #0284c7; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; }
+          a:hover { background: #0369a1; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h2>Logged Out</h2>
+          <p>You have successfully logged out of the admin portal.</p>
+          <a href="/admin">Log In Again</a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
+  // 2. Check HTTP Basic Authorization header
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Basic ')) {
     res.setHeader('WWW-Authenticate', 'Basic realm="Student Friendly Admin Area"');
@@ -53,9 +81,8 @@ app.get('/admin', (req, res) => {
     return res.status(401).send('Access Denied: Invalid Username or Password');
   }
 
-  // Fetch all student records
+  // 3. Fetch all student records
   try {
-   // Fetch ALL registered users, regardless of whether they have resume data yet
     const rows = db.prepare(`
       SELECT 
         u.id,
@@ -79,12 +106,12 @@ app.get('/admin', (req, res) => {
       return {
         name: u.name || '-',
         email: u.email || '-',
-        phone: u.phone || '-',
-        course: u.course || '-',
-        job_field: u.job_field || '-',
+        phone: u.phone || parsed.phone || '-',
+        course: u.course || parsed.course || '-',
+        job_field: u.job_field || parsed.target_role || '-',
         linkedin: parsed.linkedin || 'None',
         generated_cv: parsed.generated_text || parsed.text || 'Not generated yet',
-        signed_up: u.consent_at || '-'
+        signed_up: u.created_at || u.consent_at || '-'
       };
     });
 
@@ -118,8 +145,12 @@ app.get('/admin', (req, res) => {
           .container { max-width: 1200px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 10px; }
           .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
           h2 { color: #38bdf8; margin: 0; }
-          a.btn { background: #10b981; color: white; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; }
-          a.btn:hover { background: #059669; }
+          .actions { display: flex; gap: 10px; }
+          a.btn { color: white; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; font-size: 14px; }
+          a.btn-download { background: #10b981; }
+          a.btn-download:hover { background: #059669; }
+          a.btn-logout { background: #ef4444; }
+          a.btn-logout:hover { background: #dc2626; }
           table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
           th, td { border: 1px solid #334155; padding: 10px; text-align: left; vertical-align: top; }
           th { background: #334155; color: #38bdf8; }
@@ -129,7 +160,10 @@ app.get('/admin', (req, res) => {
         <div class="container">
           <div class="header">
             <h2>Registered Students (${students.length})</h2>
-            <a class="btn" href="/admin?download=json">Download All (JSON)</a>
+            <div class="actions">
+              <a class="btn btn-download" href="/admin?download=json">Download All (JSON)</a>
+              <a class="btn btn-logout" href="/admin?logout=1">Logout</a>
+            </div>
           </div>
           <table>
             <thead>
