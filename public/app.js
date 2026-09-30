@@ -1,4 +1,4 @@
-const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const $= (s) => document.querySelector(s),$$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MSG = {
   invalid_email: 'Please enter a valid email.', missing_fields: 'Please fill in every field.', invalid_phone: 'Please enter a valid phone number.',
@@ -31,12 +31,14 @@ function drawNav() {
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
 }
+
 function route() {
   let v = location.hash.replace(/^#\//, '') || 'home';
   if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
   if (v === 'register' && !gCred) { location.hash = '#/login'; return; }
   if ((v === 'account' || v === 'tools' || v === 'builder') && !user) { location.hash = '#/login'; return; }
   $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  if (v === 'login') initGoogle();
   if (v === 'account') fillAccount();
   if (v === 'tools') loadChecklist();
   if (v === 'builder') loadBuilder();
@@ -68,12 +70,12 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Sign in with Google ─────────────────────────────────────────────
-// ── Sign in with Google ─────────────────────────────────────────────
+// ── Sign in with Google (Fresh & Cache-Busted) ──────────────────────
 let gCred = '';
 
 function initGoogle() {
-  fetch('/api/config')
+  // Always query with ?t= timestamp to prevent browsers from reading deleted cached IDs
+  fetch('/api/config?t=' + Date.now(), { cache: 'no-store' })
     .then(r => r.json())
     .then(cfg => {
       if (!cfg.googleClientId) {
@@ -95,6 +97,7 @@ function initGoogle() {
           
           const gbtn = $('#gbtn');
           if (gbtn) {
+            gbtn.innerHTML = '';
             google.accounts.id.renderButton(gbtn, {
               theme: 'outline',
               size: 'large',
@@ -113,6 +116,7 @@ function initGoogle() {
     })
     .catch(() => {});
 }
+
 function finishSignIn(d) {
   if (d.needs_profile) {
     $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
@@ -120,11 +124,13 @@ function finishSignIn(d) {
   }
   setTok(d.token); user = d.user; gCred = ''; drawNav(); location.hash = '#/';
 }
+
 async function onGoogle(resp) {
   gCred = resp.credential;
   try { finishSignIn(await api('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential: gCred }) })); }
   catch (err) { say($('#loginMsg'), errText(err)); }
 }
+
 $('#regForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target)); f.consent = $('#consent').checked; f.credential = gCred;
@@ -202,9 +208,7 @@ async function loadBuilder() {
   buildSecs();
 }
 function collect() {
-  const f = $('#builderForm').elements, d = {};
-  for (const k of ['target_role', 'location', 'linkedin', 'skills', 'extras']) d[k] = f[k].value;
-  for (const s of Object.keys(SEC)) d[s] = $$(`[data-list="${s}"] .entry`).map((e) => Object.fromEntries([...e.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value])));
+  const f = $('#builderForm').elements, d = {};   for (const k of ['target_role', 'location', 'linkedin', 'skills', 'extras']) d[k] = f[k].value;   for (const s of Object.keys(SEC)) d[s] = $$(`[data-list="${s}"] .entry`).map((e) => Object.fromEntries([...e.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value])));
   return d;
 }
 async function saveBuilder() { bData = (await api('/api/resume/data', { method: 'PUT', body: JSON.stringify(collect()) })).data; }
