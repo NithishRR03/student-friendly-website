@@ -24,24 +24,26 @@
   <div id="login-section" class="box" style="max-width: 400px; margin-top: 100px;">
     <h2>Admin Login</h2>
     <p style="color: #94a3b8; font-size: 14px;">Enter your admin ID and password</p>
-    <div id="login-err" style="color: #ef4444; margin-bottom: 10px; font-weight: bold;"></div>
+    <div id="login-err" style="color: #ef4444; margin-bottom: 12px; font-weight: bold;"></div>
     
-    <label>Admin ID</label>
-    <input type="text" id="username" placeholder="e.g. admin" required>
-    
-    <label>Password</label>
-    <input type="password" id="password" placeholder="••••••••••••" required>
-    
-    <button id="loginBtn" style="width: 100%;">Sign In</button>
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <label>Admin ID</label>
+      <input type="text" id="username" value="SFUK" required>
+      
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••••••" required>
+      
+      <button type="submit" id="loginBtn" style="width: 100%;">Sign In</button>
+    </form>
   </div>
 
-  <!-- PROTECTED DASHBOARD SECTION -->
+  <!-- DASHBOARD SECTION -->
   <div id="dashboard-section" class="box hidden">
     <div class="top-bar">
       <h2>Registered Students</h2>
       <div>
-        <button id="downloadBtn" style="background: #10b981;">Download All (JSON)</button>
-        <button id="logoutBtn" style="background: #ef4444; margin-left: 8px;">Logout</button>
+        <button id="downloadBtn" onclick="downloadJSON()" style="background: #10b981;">Download All (JSON)</button>
+        <button id="logoutBtn" onclick="logout()" style="background: #ef4444; margin-left: 8px;">Logout</button>
       </div>
     </div>
     
@@ -66,11 +68,12 @@
   <script>
     let globalData = [];
 
-    document.getElementById('loginBtn').addEventListener('click', async () => {
+    async function handleLogin(e) {
+      if (e) e.preventDefault();
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value.trim();
       const errBox = document.getElementById('login-err');
-      errBox.innerText = '';
+      errBox.innerText = 'Checking credentials...';
 
       try {
         const res = await fetch('/api/admin/login', {
@@ -81,70 +84,74 @@
         const data = await res.json();
 
         if (res.ok && data.success) {
+          errBox.innerText = '';
           sessionStorage.setItem('adminToken', data.token);
           loadDashboard();
         } else {
-          errBox.innerText = data.error || 'Login failed';
+          errBox.innerText = data.error || 'Invalid credentials';
         }
       } catch (err) {
         errBox.innerText = 'Server error during login';
       }
-    });
+    }
 
     async function loadDashboard() {
       const token = sessionStorage.getItem('adminToken');
       if (!token) return;
 
-      const res = await fetch('/api/admin/data', {
-        headers: { 'x-admin-token': token }
-      });
+      try {
+        const res = await fetch('/api/admin/data', {
+          headers: { 'x-admin-token': token }
+        });
 
-      if (!res.ok) {
-        logout();
-        return;
+        if (!res.ok) {
+          logout();
+          return;
+        }
+
+        globalData = await res.json();
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('dashboard-section').classList.remove('hidden');
+
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        if (globalData.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No registered students yet.</td></tr>';
+          return;
+        }
+
+        globalData.forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${s.name || '-'}</strong></td>
+            <td>${s.email || '-'}</td>
+            <td>${s.phone || '-'}</td>
+            <td>${s.course || '-'}</td>
+            <td>${s.job_field || '-'}</td>
+            <td>${s.linkedin && s.linkedin !== 'Not provided' ? `<a href="${s.linkedin}" target="_blank" style="color: #38bdf8;">Profile</a>` : 'None'}</td>
+            <td>${s.generated_cv && s.generated_cv !== 'Not generated yet' ? `<div class="cv-text">${s.generated_cv}</div>` : '<span style="color: #94a3b8;">Not generated yet</span>'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        alert('Failed to load data from server.');
       }
-
-      globalData = await res.json();
-      document.getElementById('login-section').classList.add('hidden');
-      document.getElementById('dashboard-section').classList.remove('hidden');
-
-      const tbody = document.getElementById('tableBody');
-      tbody.innerHTML = '';
-
-      if (globalData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No registered students yet.</td></tr>';
-        return;
-      }
-
-      globalData.forEach(s => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${s.name || '-'}</strong></td>
-          <td>${s.email || '-'}</td>
-          <td>${s.phone || '-'}</td>
-          <td>${s.course || '-'}</td>
-          <td>${s.job_field || '-'}</td>
-          <td>${s.linkedin && s.linkedin !== 'Not provided' ? `<a href="${s.linkedin}" target="_blank" style="color: #38bdf8;">Profile</a>` : 'None'}</td>
-          <td>${s.generated_cv && s.generated_cv !== 'Not generated yet' ? `<div class="cv-text">${s.generated_cv}</div>` : '<span style="color: #94a3b8;">Not generated yet</span>'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
     }
 
-    document.getElementById('downloadBtn').addEventListener('click', () => {
+    function downloadJSON() {
       const blob = new Blob([JSON.stringify(globalData, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = 'students-master-export.json';
       a.click();
-    });
+    }
 
     function logout() {
       sessionStorage.removeItem('adminToken');
       document.getElementById('dashboard-section').classList.add('hidden');
       document.getElementById('login-section').classList.remove('hidden');
     }
-    document.getElementById('logoutBtn').addEventListener('click', logout);
 
     if (sessionStorage.getItem('adminToken')) {
       loadDashboard();
