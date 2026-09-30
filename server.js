@@ -84,20 +84,14 @@ app.get('/admin', (req, res) => {
   try {
     const activeTab = req.query.tab === 'cv' ? 'cv' : 'all';
 
+    // Safe query using u.* and rowid
     const rows = db.prepare(`
       SELECT 
-        u.id,
-        u.name,
-        u.email,
-        u.phone,
-        u.course,
-        u.job_field,
-        u.created_at,
-        u.consent_at,
+        u.*,
         r.data AS resume_data
       FROM users u
       LEFT JOIN resume_data r ON u.id = r.user_id
-      ORDER BY u.id DESC
+      ORDER BY u.rowid DESC
     `).all();
 
     // Map all sign-ups
@@ -110,7 +104,7 @@ app.get('/admin', (req, res) => {
 
       return {
         id: u.id,
-        name: u.name || 'Student #' + u.id,
+        name: u.name || 'Student #' + (u.id || ''),
         email: u.email || '-',
         phone: u.phone || parsed.phone || '-',
         course: u.course || parsed.course || '-',
@@ -118,7 +112,7 @@ app.get('/admin', (req, res) => {
         linkedin: parsed.linkedin || 'None',
         has_cv: hasCV,
         cv_text: cvContent || 'Not generated yet',
-        signed_up: u.created_at || u.consent_at || '-'
+        signed_up: u.consent_at || 'Registered'
       };
     });
 
