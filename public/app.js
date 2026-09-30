@@ -69,21 +69,50 @@ $('#searchForm').addEventListener('submit', async (e) => {
 });
 
 // ── Sign in with Google ─────────────────────────────────────────────
+// ── Sign in with Google ─────────────────────────────────────────────
 let gCred = '';
-google.accounts.id.initialize({
-  client_id: cfg.googleClientId,
-  callback: onGoogle,
-  auto_select: false,
-  itp_support: true
-});
-google.accounts.id.renderButton($('#gbtn'), {
-  theme: 'outline',
-  size: 'large',
-  type: 'standard',
-  shape: 'rectangular',
-  text: 'signin_with',
-  logo_alignment: 'left'
-});
+
+function initGoogle() {
+  fetch('/api/config')
+    .then(r => r.json())
+    .then(cfg => {
+      if (!cfg.googleClientId) {
+        const msg = $('#loginMsg');
+        if (msg) say(msg, MSG.google_not_configured);
+        return;
+      }
+      
+      let tries = 0;
+      const t = setInterval(() => {
+        if (window.google && google.accounts && google.accounts.id) {
+          clearInterval(t);
+          google.accounts.id.initialize({
+            client_id: cfg.googleClientId,
+            callback: onGoogle,
+            auto_select: false,
+            itp_support: true
+          });
+          
+          const gbtn = $('#gbtn');
+          if (gbtn) {
+            google.accounts.id.renderButton(gbtn, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              shape: 'rectangular',
+              text: 'signin_with',
+              logo_alignment: 'left'
+            });
+          }
+        } else if (++tries > 50) {
+          clearInterval(t);
+          const msg = $('#loginMsg');
+          if (msg) say(msg, MSG.bad_google_token);
+        }
+      }, 100);
+    })
+    .catch(() => {});
+}
 function finishSignIn(d) {
   if (d.needs_profile) {
     $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
