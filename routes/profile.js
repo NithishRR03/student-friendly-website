@@ -1,48 +1,44 @@
 const express = require('express');
-const db = require('../db');
-const { requireUser } = require('../auth');
+const db = require('../db.js'); // adjust path if necessary based on your setup
+
 const router = express.Router();
 
-const clip = (s, n) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, n) : null);
-
-router.get('/me', requireUser, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) || req.user;
-  res.json({
-    id: user.id,
-    name: user.name,
-    phone: user.phone || '',
-    email: user.email,
-    course: user.course || '',
-    job_field: user.job_field || '',
-    created_at: user.created_at
-  });
+// Middleware to check session
+router.use((req, res, next) => {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
+  
+  const raw = auth.slice(7);
+  const crypto = require('crypto');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  
+  const session = db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime("now")').get(tokenHash);
+  if (!session) return res.status(401).json({ error: 'unauthorized' });
+  
+  req.user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
+  next();
 });
 
-router.put('/me', requireUser, (req, res) => {
-  const b = req.body || {};
-  const u = req.user;
+router.get('/me', (req, res) => {
+  res.json(req.user);
+});
 
-  const name = clip(b.name, 100) || u.name;
-  const phone = clip(b.phone, 25) || u.phone || '-';
-  const course = clip(b.course, 150) || u.course || '-';
-  const jobField = clip(b.job_field, 150) || u.job_field || '-';
-
-  // Update existing Google sign-up with their phone, course, and job field
+router.put('/me', (req, res) => {
+  const { name, phone, course, job_field, location } = req.body;
+  
   db.prepare(`
     UPDATE users 
-    SET name = ?, 
-        phone = ?, 
-        course = ?, 
-        job_field = ?,
-        consent_at = COALESCE(consent_at, datetime('now'))
-    WHERE id = ? OR email = ?
-  `).run(name, phone, course, jobField, u.id, (u.email || '').toLowerCase());
-
-  res.json({ ok: true });
-});
-
-router.delete('/me', requireUser, (req, res) => {
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+    SET name = ?, phone = ?, course = ?, job_field = ?, location = ?
+    WHERE id = ?
+  `).run(
+    name || req.user.name, 
+    phone || req.user.phone, 
+    course || req.user.course, 
+    job_field || req.user.job_field, 
+    location || req.user.location,
+    req.user.id
+  );
+  
   res.json({ ok: true });
 });
 
