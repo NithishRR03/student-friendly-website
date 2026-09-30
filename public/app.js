@@ -77,7 +77,11 @@ function initGoogle() {
     const t = setInterval(() => {
       if (window.google && google.accounts && google.accounts.id) {
         clearInterval(t);
-        google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogle });
+        google.accounts.id.initialize({
+  client_id: cfg.googleClientId,
+  ux_mode: 'redirect',
+  login_uri: 'https://studentfriendly.onrender.com/api/auth/google'
+});
         google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', width: 300 });
       } else if (++tries > 50) { clearInterval(t); say($('#loginMsg'), 'Could not load Google sign-in. Check your connection and refresh.'); }
     }, 200);
