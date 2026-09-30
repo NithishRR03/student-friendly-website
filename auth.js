@@ -1,108 +1,34 @@
-```javascript
-const express = require('express');
 const crypto = require('crypto');
-const { v4: uuid } = require('uuid');
-const nodemailer = require('nodemailer');
-const path = require('path');
-const fs = require('fs');
+const db = require('./db');
 
-// Safe relative database resolution
-const db = fs.existsSync(path.join(__dirname, 'db.js'))
-  ? require('./db.js')
-  : require('../db.js');
+function sha(s) {
+  return crypto.createHash('sha256').update(s).digest('hex');
+}
 
-const router = express.Router();
-
-// SMTP configuration for email OTP
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_USER || 'studentsfriendlyuk@gmail.com',
-    pass: process.env.SMTP_PASS // Gmail App Password
-  }
-});
-
-// 1. Request OTP
-router.post('/send-otp', async (req, res) => {
-  const { email } = req.body || {};
-  if (!email || !email.includes('@')) {
-    return res.status(400).json({ error: 'invalid_email' });
-  }
-
-  const cleanEmail = email.toLowerCase().trim();
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-  db.prepare(`
-    INSERT INTO otps (identifier, code, expires_at)
-    VALUES (?, ?, datetime('now', '+10 minutes'))
-    ON CONFLICT(identifier) DO UPDATE SET
-      code = excluded.code,
-      expires_at = excluded.expires_at
-  `).run(cleanEmail, code);
-
-  if (process.env.SMTP_PASS) {
-    try {
-      await transporter.sendMail({
-        from: `"Student Friendly" <${process.env.SMTP_USER || 'studentsfriendlyuk@gmail.com'}>`,
-        to: cleanEmail,
-        subject: `${code} is your Student Friendly login code`,
-        text: `Your login code is: ${code}\n\nIt expires in 10 minutes.`
-      });
-    } catch (e) {
-      console.error('Email send error:', e);
-      return res.status(500).json({ error: 'Could not send verification email.' });
-    }
-  } else {
-    console.log(`[LOGIN OTP] Verification code for ${cleanEmail}: ${code}`);
-  }
-
-  res.json({ ok: true });
-});
-
-// 2. Verify OTP
-router.post('/verify-otp', (req, res) => {
-  const { email, code } = req.body || {};
-  if (!email || !code) return res.status(400).json({ error: 'missing_fields' });
-
-  const cleanEmail = email.toLowerCase().trim();
-  const record = db.prepare('SELECT * FROM otps WHERE identifier = ? AND expires_at > datetime("now")').get(cleanEmail);
-
-  if (!record || record.code !== code.trim()) {
-    return res.status(400).json({ error: 'bad_code' });
-  }
-
-  db.prepare('DELETE FROM otps WHERE identifier = ?').run(cleanEmail);
-
-  let user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail);
-  if (!user) {
-    const newId = uuid();
-    const defaultName = cleanEmail.split('@')[0];
-    db.prepare(`
-      INSERT INTO users (id, name, email, phone, course, job_field, created_at)
-      VALUES (?, ?, ?, '-', '-', '-', datetime('now'))
-    `).run(newId, defaultName, cleanEmail);
-    user = db.prepare('SELECT * FROM users WHERE id = ?').get(newId);
-  }
-
+function newSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   db.prepare(`
     INSERT INTO sessions (token_hash, user_id, expires_at)
     VALUES (?, ?, datetime('now', '+30 days'))
-  `).run(tokenHash, user.id);
+  `).run(sha(token), userId);
+  return token;
+}
 
-  res.json({ token, user });
-});
-
-// 3. Logout
-router.post('/logout', (req, res) => {
+function requireUser(req, res, next) {
   const auth = req.headers.authorization || '';
-  if (auth.startsWith('Bearer ')) {
-    const raw = auth.slice(7);
-    const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
-    db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
+  if (!auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'unauthorized' });
   }
-  res.json({ ok: true });
-});
+  
+  const tokenHash = sha(auth.slice(7));
+  const session = db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime("now")').get(tokenHash);
+  
+  if (!session) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  
+  req.user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
+  next();
+}
 
-module.exports = router;
+module.exports = { sha, newSession, requireUser };
