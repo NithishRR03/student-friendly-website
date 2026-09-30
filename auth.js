@@ -2,7 +2,13 @@ const express = require('express');
 const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
 const nodemailer = require('nodemailer');
-const db = require('../db.js');
+const path = require('path');
+const fs = require('fs');
+
+// Automatically detect if db.js is in the same folder or parent folder
+const db = fs.existsSync(path.join(__dirname, 'db.js'))
+  ? require('./db.js')
+  : require('../db.js');
 
 const router = express.Router();
 
