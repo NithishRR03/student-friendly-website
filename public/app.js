@@ -70,23 +70,20 @@ $('#searchForm').addEventListener('submit', async (e) => {
 
 // ── Sign in with Google ─────────────────────────────────────────────
 let gCred = '';
-function initGoogle() {
-  fetch('/api/config').then((r) => r.json()).then((cfg) => {
-    if (!cfg.googleClientId) { say($('#loginMsg'), MSG.google_not_configured); return; }
-    let tries = 0;
-    const t = setInterval(() => {
-      if (window.google && google.accounts && google.accounts.id) {
-        clearInterval(t);
-        google.accounts.id.initialize({
+google.accounts.id.initialize({
   client_id: cfg.googleClientId,
-  ux_mode: 'redirect',
-  login_uri: 'https://studentfriendly.onrender.com/api/auth/google'
+  callback: onGoogle,
+  auto_select: false,
+  itp_support: true
 });
-        google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', width: 300 });
-      } else if (++tries > 50) { clearInterval(t); say($('#loginMsg'), 'Could not load Google sign-in. Check your connection and refresh.'); }
-    }, 200);
-  }).catch(() => {});
-}
+google.accounts.id.renderButton($('#gbtn'), {
+  theme: 'outline',
+  size: 'large',
+  type: 'standard',
+  shape: 'rectangular',
+  text: 'signin_with',
+  logo_alignment: 'left'
+});
 function finishSignIn(d) {
   if (d.needs_profile) {
     $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
