@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-
+const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1); // Render/Railway sit behind a proxy
@@ -37,7 +37,59 @@ app.use('/api/resume', require('./routes/resume'));
 app.use('/api/checklist', require('./routes/checklist'));
 app.use('/api/cv', require('./routes/cv'));
 app.use('/api/gdpr', require('./routes/gdpr'));
+// Admin export: downloads all registered users, details, LinkedIn, and generated CVs
+app.get('/api/admin/export-all', (req, res) => {
+  const adminKey = req.query.key;
+  const SECRET = process.env.ADMIN_SECRET || 'mySuperAdminSecret2026';
 
+  if (adminKey !== SECRET) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  try {
+    const rows = db.prepare(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.phone,
+        u.course,
+        u.job_field,
+        u.consent_at,
+        r.data AS resume_data
+      FROM users u
+      LEFT JOIN resume_data r ON u.id = r.user_id
+      ORDER BY u.consent_at DESC
+    `).all();
+
+    const exportData = rows.map(u => {
+      let parsedResume = {};
+      try {
+        parsedResume = u.resume_data ? JSON.parse(u.resume_data) : {};
+      } catch {}
+
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        course: u.course,
+        job_field: u.job_field,
+        linkedin: parsedResume.linkedin || 'Not provided',
+        target_role: parsedResume.target_role || 'Not provided',
+        skills: parsedResume.skills || '',
+        generated_cv: parsedResume.generated_text || parsedResume.text || 'Not generated yet',
+        signed_up_at: u.consent_at
+      };
+    });
+
+    res.setHeader('Content-disposition', 'attachment; filename=all-students-data.json');
+    res.setHeader('Content-type', 'application/json');
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.use(express.static(path.join(__dirname, 'public'))); // the website itself
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'server_error' }); });
