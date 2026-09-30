@@ -250,6 +250,7 @@ app.get('/admin', (req, res) => {
 
     res.send(html);
   } catch (err) {
+    console.error('Admin route error:', err);
     res.status(500).send('Database error: ' + err.message);
   }
 });
