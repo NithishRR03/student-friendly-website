@@ -16,6 +16,7 @@
     .hidden { display: none; }
     .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .cv-text { max-height: 120px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 12px; background: #0f172a; padding: 6px; border-radius: 4px; }
+    #login-err { min-height: 20px; font-weight: bold; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -24,14 +25,14 @@
   <div id="login-section" class="box" style="max-width: 400px; margin-top: 100px;">
     <h2>Admin Login</h2>
     <p style="color: #94a3b8; font-size: 14px;">Enter your admin ID and password</p>
-    <div id="login-err" style="color: #ef4444; margin-bottom: 12px; font-weight: bold;"></div>
+    <div id="login-err" style="color: #ef4444;"></div>
     
     <form id="loginForm" onsubmit="handleLogin(event)">
       <label>Admin ID</label>
-      <input type="text" id="username" value="SFUK" required>
+      <input type="text" id="username" value="SFUK" required autocomplete="username">
       
       <label>Password</label>
-      <input type="password" id="password" placeholder="••••••••••••" required>
+      <input type="password" id="password" value="Tamilpasanga$3" required autocomplete="current-password">
       
       <button type="submit" id="loginBtn" style="width: 100%;">Sign In</button>
     </form>
@@ -47,6 +48,8 @@
       </div>
     </div>
     
+    <div id="data-status" style="color: #38bdf8; margin-bottom: 10px;">Loading student records...</div>
+
     <div style="overflow-x: auto;">
       <table id="studentsTable">
         <thead>
@@ -73,7 +76,11 @@
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value.trim();
       const errBox = document.getElementById('login-err');
-      errBox.innerText = 'Checking credentials...';
+      const loginBtn = document.getElementById('loginBtn');
+
+      errBox.style.color = '#38bdf8';
+      errBox.innerText = 'Verifying credentials...';
+      loginBtn.disabled = true;
 
       try {
         const res = await fetch('/api/admin/login', {
@@ -81,22 +88,33 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         });
+        
         const data = await res.json();
 
         if (res.ok && data.success) {
           errBox.innerText = '';
           sessionStorage.setItem('adminToken', data.token);
-          loadDashboard();
+          
+          // Switch to dashboard view
+          document.getElementById('login-section').classList.add('hidden');
+          document.getElementById('dashboard-section').classList.remove('hidden');
+          
+          await loadDashboard();
         } else {
-          errBox.innerText = data.error || 'Invalid credentials';
+          errBox.style.color = '#ef4444';
+          errBox.innerText = data.error || 'Invalid admin ID or password';
         }
       } catch (err) {
-        errBox.innerText = 'Server error during login';
+        errBox.style.color = '#ef4444';
+        errBox.innerText = 'Connection error: ' + err.message;
+      } finally {
+        loginBtn.disabled = false;
       }
     }
 
     async function loadDashboard() {
       const token = sessionStorage.getItem('adminToken');
+      const statusBox = document.getElementById('data-status');
       if (!token) return;
 
       try {
@@ -105,19 +123,20 @@
         });
 
         if (!res.ok) {
-          logout();
+          const errText = await res.text();
+          statusBox.style.color = '#ef4444';
+          statusBox.innerText = 'Failed to load records (' + res.status + '): ' + errText;
           return;
         }
 
         globalData = await res.json();
-        document.getElementById('login-section').classList.add('hidden');
-        document.getElementById('dashboard-section').classList.remove('hidden');
+        statusBox.innerText = 'Total students: ' + globalData.length;
 
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
 
         if (globalData.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No registered students yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 20px;">No registered students found in database.</td></tr>';
           return;
         }
 
@@ -129,13 +148,14 @@
             <td>${s.phone || '-'}</td>
             <td>${s.course || '-'}</td>
             <td>${s.job_field || '-'}</td>
-            <td>${s.linkedin && s.linkedin !== 'Not provided' ? `<a href="${s.linkedin}" target="_blank" style="color: #38bdf8;">Profile</a>` : 'None'}</td>
-            <td>${s.generated_cv && s.generated_cv !== 'Not generated yet' ? `<div class="cv-text">${s.generated_cv}</div>` : '<span style="color: #94a3b8;">Not generated yet</span>'}</td>
+            <td>${s.linkedin && s.linkedin !== 'Not provided' ? '<a href="' + s.linkedin + '" target="_blank" style="color: #38bdf8;">Profile</a>' : 'None'}</td>
+            <td>${s.generated_cv && s.generated_cv !== 'Not generated yet' ? '<div class="cv-text">' + s.generated_cv + '</div>' : '<span style="color: #94a3b8;">Not generated yet</span>'}</td>
           `;
           tbody.appendChild(tr);
         });
       } catch (err) {
-        alert('Failed to load data from server.');
+        statusBox.style.color = '#ef4444';
+        statusBox.innerText = 'Network error fetching records: ' + err.message;
       }
     }
 
@@ -151,9 +171,13 @@
       sessionStorage.removeItem('adminToken');
       document.getElementById('dashboard-section').classList.add('hidden');
       document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('login-err').innerText = '';
     }
 
+    // Auto-load if token already stored in session
     if (sessionStorage.getItem('adminToken')) {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('dashboard-section').classList.remove('hidden');
       loadDashboard();
     }
   </script>
