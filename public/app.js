@@ -17,6 +17,15 @@ const setTok = (t) => { try { t ? localStorage.setItem('sf_session', t) : localS
 const say = (el, t, ok) => { el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
 const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute and try again.' : MSG[e.message] || 'Something went wrong — please try again.';
 
+// Helper to verify candidate has completed mandatory fields
+function isProfileComplete(u) {
+  if (!u) return false;
+  const hasPhone = Boolean(u.phone && u.phone !== '-' && u.phone.trim().length >= 7);
+  const hasCourse = Boolean(u.course && u.course !== '-' && u.course.trim().length > 0);
+  const hasJobField = Boolean(u.job_field && u.job_field !== '-' && u.job_field.trim().length > 0);
+  return hasPhone && hasCourse && hasJobField;
+}
+
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (tok()) headers.Authorization = 'Bearer ' + tok();
@@ -37,9 +46,21 @@ function route() {
   if (!['home', 'register', 'login', 'account', 'tools', 'builder', 'privacy'].includes(v)) v = 'home';
   if (v === 'register' && !gCred) { location.hash = '#/login'; return; }
   if ((v === 'account' || v === 'tools' || v === 'builder') && !user) { location.hash = '#/login'; return; }
+
+  // Mandatory gate: If logged in but profile is not completed, lock them to the profile page
+  if (user && !isProfileComplete(user) && v !== 'account' && v !== 'privacy') {
+    location.hash = '#/account';
+    return;
+  }
+
   $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   if (v === 'login') initGoogle();
-  if (v === 'account') fillAccount();
+  if (v === 'account') {
+    fillAccount();
+    if (user && !isProfileComplete(user)) {
+      say($('#acctMsg'), 'Please provide your mobile number, course, and job field to continue.', false);
+    }
+  }
   if (v === 'tools') loadChecklist();
   if (v === 'builder') loadBuilder();
   scrollTo(0, 0);
@@ -70,51 +91,41 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Sign in with Google (Fresh & Cache-Busted) ──────────────────────
+// ── Sign in with Google (Hardcoded Active Client ID) ────────────────
 let gCred = '';
 
 function initGoogle() {
-  // Always query with ?t= timestamp to prevent browsers from reading deleted cached IDs
-  fetch('/api/config?t=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.json())
-    .then(cfg => {
-      if (!cfg.googleClientId) {
-        const msg = $('#loginMsg');
-        if (msg) say(msg, MSG.google_not_configured);
-        return;
-      }
+  const clientId = '498027471861-mvjkbek8r3rv7gdkneltps100vga3eiip.apps.googleusercontent.com';
+
+  let tries = 0;
+  const t = setInterval(() => {
+    if (window.google && google.accounts && google.accounts.id) {
+      clearInterval(t);
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: onGoogle,
+        auto_select: false,
+        itp_support: true
+      });
       
-      let tries = 0;
-      const t = setInterval(() => {
-        if (window.google && google.accounts && google.accounts.id) {
-          clearInterval(t);
-          google.accounts.id.initialize({
-            client_id: cfg.googleClientId,
-            callback: onGoogle,
-            auto_select: false,
-            itp_support: true
-          });
-          
-          const gbtn = $('#gbtn');
-          if (gbtn) {
-            gbtn.innerHTML = '';
-            google.accounts.id.renderButton(gbtn, {
-              theme: 'outline',
-              size: 'large',
-              type: 'standard',
-              shape: 'rectangular',
-              text: 'signin_with',
-              logo_alignment: 'left'
-            });
-          }
-        } else if (++tries > 50) {
-          clearInterval(t);
-          const msg = $('#loginMsg');
-          if (msg) say(msg, MSG.bad_google_token);
-        }
-      }, 100);
-    })
-    .catch(() => {});
+      const gbtn = $('#gbtn');
+      if (gbtn) {
+        gbtn.innerHTML = '';
+        google.accounts.id.renderButton(gbtn, {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+          shape: 'rectangular',
+          text: 'signin_with',
+          logo_alignment: 'left'
+        });
+      }
+    } else if (++tries > 50) {
+      clearInterval(t);
+      const msg = $('#loginMsg');
+      if (msg) say(msg, MSG.bad_google_token);
+    }
+  }, 100);
 }
 
 function finishSignIn(d) {
@@ -122,7 +133,17 @@ function finishSignIn(d) {
     $('#gEmail').textContent = d.email; $('#regForm').elements['name'].value = d.name || '';
     location.hash = '#/register'; return;
   }
-  setTok(d.token); user = d.user; gCred = ''; drawNav(); location.hash = '#/';
+  setTok(d.token); 
+  user = d.user; 
+  gCred = ''; 
+  drawNav(); 
+
+  // Force candidate to complete profile immediately after Google Sign-In
+  if (!isProfileComplete(user)) {
+    location.hash = '#/account';
+  } else {
+    location.hash = '#/';
+  }
 }
 
 async function onGoogle(resp) {
@@ -144,15 +165,36 @@ $('#regForm').addEventListener('submit', async (e) => {
 // ── Account ─────────────────────────────────────────────────────────
 function fillAccount() {
   $('#acctEmail').textContent = user.email;
-  for (const k of ['name', 'phone', 'course', 'job_field']) $('#acctForm').elements[k].value = user[k];
+  for (const k of ['name', 'phone', 'course', 'job_field']) {
+    const val = user[k] === '-' ? '' : (user[k] || '');
+    if ($('#acctForm').elements[k]) $('#acctForm').elements[k].value = val;
+  }
 }
+
 $('#acctForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const formPayload = Object.fromEntries(new FormData(e.target));
+  
+  if (!formPayload.phone || formPayload.phone.trim().length < 7) {
+    say($('#acctMsg'), 'Please enter a valid mobile number.', false);
+    return;
+  }
+
   try {
-    await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
-    user = { ...user, ...Object.fromEntries(new FormData(e.target)) }; drawNav(); say($('#acctMsg'), 'Saved.', true);
-  } catch (err) { say($('#acctMsg'), errText(err)); }
+    await api('/api/profile/me', { method: 'PUT', body: JSON.stringify(formPayload) });
+    user = { ...user, ...formPayload };
+    drawNav(); 
+    say($('#acctMsg'), 'Profile completed! Redirecting to jobs…', true);
+    
+    // Once saved, unlock access and direct candidate to jobs
+    setTimeout(() => {
+      location.hash = '#/';
+    }, 900);
+  } catch (err) { 
+    say($('#acctMsg'), errText(err)); 
+  }
 });
+
 $('#logoutBtn').addEventListener('click', async () => {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
   try { google.accounts.id.disableAutoSelect(); } catch {}
@@ -262,6 +304,14 @@ $('#kitOut').addEventListener('click', (e) => {
 });
 
 (async function init() {
-  if (tok()) { try { user = await api('/api/profile/me'); } catch { setTok(null); } }
-  drawNav(); initGoogle(); route();
+  if (tok()) { 
+    try { 
+      user = await api('/api/profile/me'); 
+    } catch { 
+      setTok(null); 
+    } 
+  }
+  drawNav(); 
+  initGoogle(); 
+  route();
 })();
