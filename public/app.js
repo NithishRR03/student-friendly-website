@@ -54,13 +54,13 @@ function updateNavigation() {
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
 
-  const findJobsBtn = $('#findJobsBtn');   if (findJobsBtn) {     findJobsBtn.hidden = !complete;   } }  function route() {   let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';   if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';   if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) { location.hash = '#/login'; return; }      // Strict route locking: user cannot navigate to any feature until profile is completed   if (user && !isProfileComplete(user) && v !== 'account') {     location.hash = '#/account';     return;   }      $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  const findJobsBtn = $('#findJobsBtn');    if (findJobsBtn) {      findJobsBtn.hidden = !complete;    }  }   function route() {    let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';    if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';       if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) {      location.hash = '#/login';      return;    }         // Strict route locking: user cannot navigate to any feature until profile is completed    if (user && !isProfileComplete(user) && v !== 'account') {      location.hash = '#/account';      return;    }         $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   updateNavigation();
 
   if (v === 'account') {
     fillAccount();
     if (user && !isProfileComplete(user)) {
-      say($('#acctMsg'), '⚠️ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
+      say($('#acctMsg'), '⚠️️ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
     }
   }
   if (v === 'tools') loadChecklist();
