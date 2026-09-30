@@ -19,8 +19,14 @@ app.use(cors({ origin: allowedOrigins.includes('*') ? true : allowedOrigins }));
 app.use(express.json({ limit: '200kb' }));
 app.use(rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
-// Public config & health
-app.get('/api/config', (req, res) => res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' }));
+// Public config with strict no-cache headers so browsers never cache an old Google Client ID
+app.get('/api/config', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
+
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Core API routes
@@ -84,7 +90,6 @@ app.get('/admin', (req, res) => {
   try {
     const activeTab = req.query.tab === 'cv' ? 'cv' : 'all';
 
-    // Safe query using u.* and rowid
     const rows = db.prepare(`
       SELECT 
         u.*,
@@ -94,7 +99,6 @@ app.get('/admin', (req, res) => {
       ORDER BY u.rowid DESC
     `).all();
 
-    // Map all sign-ups
     const allStudents = rows.map(u => {
       let parsed = {};
       try { parsed = u.resume_data ? JSON.parse(u.resume_data) : {}; } catch {}
@@ -116,10 +120,8 @@ app.get('/admin', (req, res) => {
       };
     });
 
-    // Filter students who specifically generated a CV
     const cvStudents = allStudents.filter(s => s.has_cv);
 
-    // Handle CSV or JSON Exports
     if (req.query.download === 'all-json') {
       res.setHeader('Content-disposition', 'attachment; filename=all-signups.json');
       res.setHeader('Content-type', 'application/json');
@@ -131,7 +133,6 @@ app.get('/admin', (req, res) => {
       return res.send(JSON.stringify(cvStudents, null, 2));
     }
 
-    // Build Tab 1 Table: All Signups (includes Student ID)
     const allRowsHtml = allStudents.map(s => `
       <tr>
         <td><code style="color:#38bdf8;font-size:12px;">${s.id}</code></td>
@@ -145,7 +146,6 @@ app.get('/admin', (req, res) => {
       </tr>
     `).join('');
 
-    // Build Tab 2 Table: CV Generated Students Only
     const cvRowsHtml = cvStudents.map(s => `
       <tr>
         <td><code style="color:#38bdf8;font-size:12px;">${s.id}</code></td>
@@ -198,7 +198,6 @@ app.get('/admin', (req, res) => {
             </div>
           </div>
 
-          <!-- TAB SWITCHER -->
           <div class="nav-tabs">
             <a class="tab ${activeTab === 'all' ? 'active' : ''}" href="/admin?tab=all">
               All Sign-Ups (${allStudents.length})
@@ -208,7 +207,6 @@ app.get('/admin', (req, res) => {
             </a>
           </div>
 
-          <!-- TAB 1: ALL USERS -->
           ${activeTab === 'all' ? `
             <table>
               <thead>
@@ -228,7 +226,6 @@ app.get('/admin', (req, res) => {
               </tbody>
             </table>
           ` : `
-          <!-- TAB 2: CV GENERATED ONLY -->
             <table>
               <thead>
                 <tr>
@@ -259,8 +256,14 @@ app.get('/admin', (req, res) => {
   }
 });
 
-// Static website files (serves student front end)
-app.use(express.static(path.join(__dirname, 'public')));
+// Static website files with no-cache on HTML files
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 // Error handling
 app.use((err, req, res, next) => { 
