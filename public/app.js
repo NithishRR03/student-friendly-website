@@ -61,7 +61,12 @@ function updateNavigation() {
       say($('#acctMsg'), '⚠ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
     }
   }
-  if (v === 'tools') loadChecklist();
+  
+  if (v === 'tools') {
+    loadChecklist();
+    renderCourses(); // NEW: Triggers the course rendering
+  }
+  
   if (v === 'builder') loadBuilder();
   scrollTo(0, 0);
 }
@@ -256,6 +261,36 @@ $('#kitOut').addEventListener('click', (e) => {
   const b = e.target.closest('[data-copy]');
   if (b) navigator.clipboard.writeText(copies[b.dataset.copy]).then(() => flash(b, 'Copied'));
 });
+
+// ── Free Course Suggestions ──────────────────────────────────────────
+const FREE_COURSES = [
+  { keywords: ['hr', 'human resources', 'recruitment', 'talent', 'management'], title: 'Great Learning: HR Management', url: 'https://www.mygreatlearning.com/academy/learn-for-free/courses/human-resource-management' },
+  { keywords: ['market', 'seo', 'social', 'content'], title: 'HubSpot Inbound Marketing', url: 'https://academy.hubspot.com/courses/inbound' },
+  { keywords: ['it', 'software', 'develop', 'web', 'tech'], title: 'FreeCodeCamp Certifications', url: 'https://www.freecodecamp.org/' },
+  { keywords: ['data', 'analy', 'sql', 'python'], title: 'Google Data Analytics', url: 'https://www.coursera.org/professional-certificates/google-data-analytics' },
+  { keywords: ['design', 'ux', 'ui', 'creative'], title: 'Google UX Design', url: 'https://www.coursera.org/professional-certificates/google-ux-design' },
+  { keywords: ['admin', 'business', 'manage', 'consult'], title: 'LinkedIn Learning: Soft Skills', url: 'https://learning.linkedin.com/' },
+  { keywords: ['finance', 'account', 'bank', 'audit'], title: 'Corporate Finance Institute (Free)', url: 'https://corporatefinanceinstitute.com/collections/' }
+];
+
+function renderCourses() {
+  const panel = $('#coursePanel');
+  if (!panel || !user || !user.job_field) return;
+
+  const field = user.job_field.toLowerCase();
+  $('#courseFieldText').textContent = user.job_field;
+  
+  let matches = FREE_COURSES.filter(c => c.keywords.some(k => field.includes(k)));
+  if (matches.length === 0) {
+    matches = [FREE_COURSES[5], FREE_COURSES[1]]; 
+  }
+
+  $('#courseList').innerHTML = matches.map(c => 
+    `<a href="${c.url}" target="_blank" rel="noopener noreferrer" class="btn ghost sm" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">${c.title} ↗</a>`
+  ).join('');
+  
+  panel.hidden = false;
+}
 
 (async function init() {
   if (tok()) { 
