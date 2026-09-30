@@ -5,26 +5,28 @@ const MSG = {
   email_exists: 'That email is already registered.', bad_code: 'That code is incorrect or has expired.',
   too_many_attempts: 'Too many attempts — please wait a minute.', not_logged_in: 'Please sign in first.',
   add_details_first: 'Add your skills or education first, then try again.',
+  google_not_configured: 'Google Login is not configured.', bad_google_token: 'Google sign in failed.', email_not_verified: 'Google email not verified.'
 };
 const CHECKLIST = [
   ['c1', 'Photo, headline and banner filled in'], ['c2', "Headline says what you're looking for, not just your degree"],
   ['c3', 'About section in first person, 3–4 short paragraphs'], ['c4', 'Each experience has one measurable outcome'],
   ['c5', 'At least five relevant skills added and pinned'], ['c6', 'Custom LinkedIn URL set'],
 ];
-let user = null, pendingLoginEmail = '';
+let user = null;
 
 const tok = () => { try { return localStorage.getItem('sf_session'); } catch { return null; } };
 const setTok = (t) => { try { t ? localStorage.setItem('sf_session', t) : localStorage.removeItem('sf_session'); } catch {} };
 const say = (el, t, ok) => { if (!el) return; el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
 const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute.' : MSG[e.message] || 'Something went wrong — please try again.';
 
-// Verify that candidate has submitted phone, course, and job field
+// Verify that candidate has submitted phone, course, job field, AND location
 function isProfileComplete(u) {
   if (!u) return false;
   const p = (u.phone || '').trim();
   const c = (u.course || '').trim();
   const j = (u.job_field || '').trim();
-  return Boolean(p && p !== '-' && p.length >= 7 && c && c !== '-' && j && j !== '-');
+  const l = (u.location || '').trim();
+  return Boolean(p && p !== '-' && p.length >= 7 && c && c !== '-' && j && j !== '-' && l && l !== '-');
 }
 
 async function api(path, opts = {}) {
@@ -52,13 +54,13 @@ function updateNavigation() {
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
 
-  const findJobsBtn = $('#findJobsBtn');   if (findJobsBtn) {     findJobsBtn.hidden = !complete;   } }  function route() {   let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';   if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';   if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) { location.hash = '#/login'; return; }    // Strict route locking: user cannot navigate to any feature until profile is completed   if (user && !isProfileComplete(user) && v !== 'account') {     location.hash = '#/account';     return;   }    $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  const findJobsBtn = $('#findJobsBtn');   if (findJobsBtn) {     findJobsBtn.hidden = !complete;   } }  function route() {   let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';   if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';   if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) { location.hash = '#/login'; return; }      // Strict route locking: user cannot navigate to any feature until profile is completed   if (user && !isProfileComplete(user) && v !== 'account') {     location.hash = '#/account';     return;   }      $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   updateNavigation();
 
   if (v === 'account') {
     fillAccount();
     if (user && !isProfileComplete(user)) {
-      say($('#acctMsg'), '⚠️ Mandatory: Please enter your Phone Number, Course, and Job Field to unlock services.', false);
+      say($('#acctMsg'), '⚠️ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
     }
   }
   if (v === 'tools') loadChecklist();
@@ -91,37 +93,19 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Email / Phone OTP Authentication ────────────────────────────────
-$('#otpReqForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = $('#loginEmail').value.trim();
-  say($('#loginMsg'), 'Sending verification code…', true);
-
+// ── Google Authentication ────────────────────────────────
+window.handleGoogleLogin = async (response) => {
+  say($('#loginMsg'), 'Verifying with Google...', true);
   try {
-    await api('/api/auth/send-otp', { method: 'POST', body: JSON.stringify({ email }) });
-    pendingLoginEmail = email;
-    $('#otpReqForm').hidden = true;
-    $('#otpVerifyForm').hidden = false;
-    say($('#loginMsg'), `A 6-digit code was sent to ${email}`, true);
-  } catch (err) {
-    say($('#loginMsg'), errText(err));
-  }
-});
-
-$('#otpVerifyForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const code = $('#loginOtp').value.trim();
-  say($('#loginMsg'), 'Verifying…', true);
-
-  try {
-    const res = await api('/api/auth/verify-otp', {
+    const res = await api('/api/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ email: pendingLoginEmail, code })
+      body: JSON.stringify({ credential: response.credential })
     });
     setTok(res.token);
     user = res.user;
     updateNavigation();
 
+    // Lock candidate to profile if mandatory fields are missing
     if (!isProfileComplete(user)) {
       location.hash = '#/account';
     } else {
@@ -130,18 +114,13 @@ $('#otpVerifyForm').addEventListener('submit', async (e) => {
   } catch (err) {
     say($('#loginMsg'), errText(err));
   }
-});
-
-$('#btnResend').addEventListener('click', () => {
-  $('#otpVerifyForm').hidden = true;
-  $('#otpReqForm').hidden = false;
-  $('#loginMsg').textContent = '';
-});
+};
 
 // ── Account / Candidate Profile ─────────────────────────────────────
 function fillAccount() {
   $('#acctEmail').textContent = user.email;
-  for (const k of ['name', 'phone', 'course', 'job_field']) {
+  // Added 'location' to the loop to populate the form
+  for (const k of ['name', 'phone', 'course', 'job_field', 'location']) {
     const val = (user[k] === '-' || !user[k]) ? '' : user[k];
     if ($('#acctForm').elements[k]) $('#acctForm').elements[k].value = val;
   }
@@ -161,6 +140,10 @@ $('#acctForm').addEventListener('submit', async (e) => {
   }
   if (!f.job_field || f.job_field.trim().length === 0) {
     say($('#acctMsg'), 'Please specify your target job field.', false);
+    return;
+  }
+  if (!f.location || f.location.trim().length === 0) {
+    say($('#acctMsg'), 'Please specify your location.', false);
     return;
   }
 
