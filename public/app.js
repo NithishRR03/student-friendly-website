@@ -19,7 +19,6 @@ const setTok = (t) => { try { t ? localStorage.setItem('sf_session', t) : localS
 const say = (el, t, ok) => { if (!el) return; el.textContent = t; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
 const errText = (e) => e.status === 429 ? 'Too many requests — please wait a minute.' : MSG[e.message] || 'Something went wrong — please try again.';
 
-// Verify that candidate has submitted phone, course, job field, AND location
 function isProfileComplete(u) {
   if (!u) return false;
   const p = (u.phone || '').trim();
@@ -41,7 +40,6 @@ async function api(path, opts = {}) {
 function updateNavigation() {
   const complete = isProfileComplete(user);
   
-  // Hide top navigation services until mandatory details are filled
   const topNav = $('#topNav');
   if (topNav) {
     const serviceLinks = topNav.querySelectorAll('a:not(#navAuth a)');
@@ -54,13 +52,13 @@ function updateNavigation() {
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
 
-  const findJobsBtn = $('#findJobsBtn');    if (findJobsBtn) {      findJobsBtn.hidden = !complete;    }  }   function route() {    let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';    if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';       if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) {      location.hash = '#/login';      return;    }         // Strict route locking: user cannot navigate to any feature until profile is completed    if (user && !isProfileComplete(user) && v !== 'account') {      location.hash = '#/account';      return;    }         $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  const findJobsBtn = $('#findJobsBtn');    if (findJobsBtn) {      findJobsBtn.hidden = !complete;    }  }   function route() {    let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';    if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';       if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) {      location.hash = '#/login';      return;    }         if (user && !isProfileComplete(user) && v !== 'account') {      location.hash = '#/account';      return;    }         $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   updateNavigation();
 
   if (v === 'account') {
     fillAccount();
     if (user && !isProfileComplete(user)) {
-      say($('#acctMsg'), '⚠️️ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
+      say($('#acctMsg'), '⚠ Mandatory: Please enter your Phone Number, Course, Job Field, and Location to unlock services.', false);
     }
   }
   if (v === 'tools') loadChecklist();
@@ -69,7 +67,6 @@ function updateNavigation() {
 }
 window.addEventListener('hashchange', route);
 
-// ── Search ──────────────────────────────────────────────────────────
 function renderResults(d) {
   const s = d.suggestions;
   let h = '';
@@ -93,7 +90,6 @@ $('#searchForm').addEventListener('submit', async (e) => {
   catch { $('#results').innerHTML = '<p class="msg err">Search failed — please try again in a minute.</p>'; }
 });
 
-// ── Google Authentication ────────────────────────────────
 window.handleGoogleLogin = async (response) => {
   say($('#loginMsg'), 'Verifying with Google...', true);
   try {
@@ -105,7 +101,6 @@ window.handleGoogleLogin = async (response) => {
     user = res.user;
     updateNavigation();
 
-    // Lock candidate to profile if mandatory fields are missing
     if (!isProfileComplete(user)) {
       location.hash = '#/account';
     } else {
@@ -116,10 +111,8 @@ window.handleGoogleLogin = async (response) => {
   }
 };
 
-// ── Account / Candidate Profile ─────────────────────────────────────
 function fillAccount() {
   $('#acctEmail').textContent = user.email;
-  // Added 'location' to the loop to populate the form
   for (const k of ['name', 'phone', 'course', 'job_field', 'location']) {
     const val = (user[k] === '-' || !user[k]) ? '' : user[k];
     if ($('#acctForm').elements[k]) $('#acctForm').elements[k].value = val;
@@ -131,7 +124,7 @@ $('#acctForm').addEventListener('submit', async (e) => {
   const f = Object.fromEntries(new FormData(e.target));
   
   if (!f.phone || f.phone.trim().length < 7) {
-    say($('#acctMsg'), 'Please enter a valid phone number (at least 7 digits).', false);
+    say($('#acctMsg'), 'Please enter a valid phone number.', false);
     return;
   }
   if (!f.course || f.course.trim().length === 0) {
@@ -171,7 +164,6 @@ $('#deleteBtn').addEventListener('click', async () => {
   await api('/api/profile/me', { method: 'DELETE' }); setTok(null); user = null; updateNavigation(); location.hash = '#/';
 });
 
-// ── CV Tools & Checklist ───────────────────────────────────────────
 $('#cvForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const out = $('#cvOut'); out.hidden = false; out.innerHTML = '<p class="muted">Checking…</p>';
@@ -193,7 +185,6 @@ $('#checklist').addEventListener('change', async (e) => {
   try { await api('/api/checklist/' + e.target.id, { method: 'PUT', body: JSON.stringify({ checked: e.target.checked }) }); } catch {}
 });
 
-// ── Resume & LinkedIn Builder ───────────────────────────────────────
 const SEC = {
   edu: { title: 'Education', f: [['school', 'School / university'], ['degree', 'Degree and course'], ['dates', 'Dates'], ['details', 'Modules, grade, dissertation, achievements', 1]] },
   exp: { title: 'Experience (jobs, internships, volunteering)', f: [['role', 'Job title'], ['company', 'Company'], ['dates', 'Dates'], ['details', 'What did you do? Include metrics if possible.', 1]] },
@@ -266,7 +257,6 @@ $('#kitOut').addEventListener('click', (e) => {
   if (b) navigator.clipboard.writeText(copies[b.dataset.copy]).then(() => flash(b, 'Copied'));
 });
 
-// App Entry
 (async function init() {
   if (tok()) { 
     try { 
