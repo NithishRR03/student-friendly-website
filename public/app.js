@@ -95,7 +95,7 @@ $('#searchForm').addEventListener('submit', async (e) => {
 let gCred = '';
 
 function initGoogle() {
-  const clientId = '498027471861-mvjkbek8r3rv7gdkneltps100vga3eiip.apps.googleusercontent.com';
+  const clientId = '498027471861-mvjkbek8r3rv7gdknetps100vga3eiip.apps.googleusercontent.com';
 
   let tries = 0;
   const t = setInterval(() => {
