@@ -12,7 +12,7 @@
 <body>
 <header><div class="nav">
   <a class="brand" href="#/"><svg viewBox="0 0 200 200" fill="none" aria-hidden="true"><path d="M40 140Q70 80 100 120Q130 155 160 70" stroke="currentColor" stroke-width="12" stroke-linecap="round"/><circle cx="40" cy="140" r="11" fill="currentColor"/><rect x="146" y="50" width="30" height="26" rx="5" stroke="currentColor" stroke-width="9"/></svg>Student <em>Friendly</em></a>
-  <nav id="topNav"><a href="#/">Find jobs</a><a href="#/builder">Resume &amp; LinkedIn</a><a href="#/tools">CV check</a><span id="navAuth"></span></nav>
+  <nav><a href="#/">Find jobs</a><a href="#/builder">Resume &amp; LinkedIn</a><a href="#/tools">CV check</a><span id="navAuth"></span></nav>
 </div></header>
 
 <main class="wrap">
@@ -95,10 +95,10 @@
       <div id="secs"></div>
       <label>Certificates, awards, languages (one per line)<textarea name="extras" rows="3" maxlength="1000"></textarea></label>
       <div class="row">
-      <a class="btn ghost" id="findJobsBtn" href="#/" hidden>Find matching jobs</a>
-      <button class="btn ghost" id="logoutBtn" type="button">Log out</button>
-      <button class="btn ghost danger" id="deleteBtn" type="button">Delete my account</button>
-    </div>
+        <button class="btn" type="submit">Save details</button>
+        <button class="btn ghost" type="button" id="genResume">Generate ATS resume</button>
+        <button class="btn ghost" type="button" id="genKit">Generate LinkedIn kit</button>
+      </div>
       <p class="msg" id="bMsg"></p>
     </form>
     <div class="panel" id="resumeOut" hidden>
