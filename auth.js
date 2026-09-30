@@ -1,3 +1,4 @@
+```javascript
 const express = require('express');
 const crypto = require('crypto');
 const { v4: uuid } = require('uuid');
@@ -5,7 +6,7 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 
-// Automatically detect if db.js is in the same folder or parent folder
+// Safe relative database resolution
 const db = fs.existsSync(path.join(__dirname, 'db.js'))
   ? require('./db.js')
   : require('../db.js');
@@ -31,7 +32,6 @@ router.post('/send-otp', async (req, res) => {
   const cleanEmail = email.toLowerCase().trim();
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-  // Store OTP (valid for 10 minutes)
   db.prepare(`
     INSERT INTO otps (identifier, code, expires_at)
     VALUES (?, ?, datetime('now', '+10 minutes'))
@@ -53,7 +53,6 @@ router.post('/send-otp', async (req, res) => {
       return res.status(500).json({ error: 'Could not send verification email.' });
     }
   } else {
-    // If SMTP_PASS is not set yet in Render, code logs to Render console for testing
     console.log(`[LOGIN OTP] Verification code for ${cleanEmail}: ${code}`);
   }
 
@@ -72,10 +71,8 @@ router.post('/verify-otp', (req, res) => {
     return res.status(400).json({ error: 'bad_code' });
   }
 
-  // Delete used OTP
   db.prepare('DELETE FROM otps WHERE identifier = ?').run(cleanEmail);
 
-  // Retrieve or create candidate
   let user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail);
   if (!user) {
     const newId = uuid();
@@ -87,7 +84,6 @@ router.post('/verify-otp', (req, res) => {
     user = db.prepare('SELECT * FROM users WHERE id = ?').get(newId);
   }
 
-  // Create 30-day session
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   db.prepare(`
