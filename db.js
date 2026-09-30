@@ -1,7 +1,16 @@
-// db.js — SQLite. Swap for Postgres later without touching the routes' logic.
+// db.js — SQLite. Automatically ensures database folder exists on Render.
 const path = require('path');
+const fs = require('fs');
 const Database = require('better-sqlite3');
-const db = new Database(process.env.DB_PATH || path.join(__dirname, 'data', 'app.db'));
+
+const dbDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+const dbPath = process.env.DB_PATH || path.join(dbDir, 'app.db');
+const db = new Database(dbPath);
+
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
