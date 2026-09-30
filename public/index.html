@@ -41,28 +41,30 @@
       <div id="results"></div>
     </section>
 
-    <!-- Sign In (Email / Phone OTP) -->
+    <!-- Sign In (Google Auth) -->
     <section class="view" id="v-login" hidden>
       <div class="panel max-w-sm">
         <h2>Sign In</h2>
-        <p class="muted">Enter your email address to receive a 6-digit login code.</p>
+        <p class="muted">Sign in with your Google account to access all tools.</p>
         
-        <form id="otpReqForm">
-          <label>Email address
-            <input type="email" id="loginEmail" required placeholder="name@example.com">
-          </label>
-          <button class="btn" type="submit" id="btnSendOtp">Send Verification Code</button>
-        </form>
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
+        
+        <div id="g_id_onload"
+             data-client_id="498027471861-mvjkbek8r3rv7gdknetps100vga3eiip.apps.googleusercontent.com"
+             data-context="signin"
+             data-ux_mode="popup"
+             data-callback="handleGoogleLogin"
+             data-auto_prompt="false">
+        </div>
 
-        <form id="otpVerifyForm" hidden style="margin-top: 1.5rem;">
-          <label>6-Digit Code
-            <input type="text" id="loginOtp" required maxlength="6" placeholder="123456" pattern="[0-9]{6}">
-          </label>
-          <button class="btn" type="submit" id="btnVerifyOtp">Verify &amp; Continue</button>
-          <div style="margin-top: 0.75rem;">
-            <button class="btn ghost sm" type="button" id="btnResend">Use a different email</button>
-          </div>
-        </form>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="rectangular"
+             data-theme="outline"
+             data-text="signin_with"
+             data-size="large"
+             data-logo_alignment="left">
+        </div>
 
         <div id="loginMsg" style="margin-top: 1rem;"></div>
       </div>
