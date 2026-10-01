@@ -21,7 +21,8 @@ function requireUser(req, res, next) {
   }
   
   const tokenHash = sha(auth.slice(7));
-  const session = db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime("now")').get(tokenHash);
+  // FIXED: Outer double quotes allow single quotes around 'now'
+  const session = db.prepare("SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash);
   
   if (!session) {
     return res.status(401).json({ error: 'unauthorized' });
