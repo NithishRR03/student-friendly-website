@@ -321,4 +321,3 @@ function renderCourses() {
   updateNavigation(); 
   route();
 })();
-EOF
