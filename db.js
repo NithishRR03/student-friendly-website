@@ -1,6 +1,3 @@
-rm db.js
-cat > db.js <<'EOF'
-// db.js — SQLite. Swap for Postgres later without touching the routes' logic.
 const path = require('path');
 const Database = require('better-sqlite3');
 const db = new Database(process.env.DB_PATH || path.join(__dirname, 'data', 'app.db'));
@@ -36,4 +33,3 @@ db.exec(`
 const cols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
 if (!cols.includes('location')) db.exec("ALTER TABLE users ADD COLUMN location TEXT NOT NULL DEFAULT ''");
 module.exports = db;
-EOF
