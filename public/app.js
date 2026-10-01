@@ -1,3 +1,4 @@
+cat > public/app.js <<'EOF'
 const $= (s) => document.querySelector(s),$$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MSG = {
@@ -52,7 +53,22 @@ function updateNavigation() {
     ? `<a href="#/account">${esc(user.name.split(' ')[0])}</a>`
     : '<a class="btn sm" href="#/login">Sign in</a>';
 
-  const findJobsBtn = $('#findJobsBtn');    if (findJobsBtn) {      findJobsBtn.hidden = !complete;    }  }   function route() {    let v = location.hash.replace(/^#\//, '') \vert{}\vert{} 'home';    if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';       if ((v === 'account' \vert{}\vert{} v === 'tools' \vert{}\vert{} v === 'builder') && !user) {      location.hash = '#/login';      return;    }         if (user && !isProfileComplete(user) && v !== 'account') {      location.hash = '#/account';      return;    }         $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
+  const findJobsBtn = $('#findJobsBtn');
+  if (findJobsBtn) { findJobsBtn.hidden = !complete; }
+}
+
+function route() {
+  let v = location.hash.replace(/^#\//, '') || 'home';
+  if (!['home', 'login', 'account', 'tools', 'builder'].includes(v)) v = 'home';
+  if ((v === 'account' || v === 'tools' || v === 'builder') && !user) {
+    location.hash = '#/login';
+    return;
+  }
+  if (user && !isProfileComplete(user) && v !== 'account') {
+    location.hash = '#/account';
+    return;
+  }
+  $$('.view').forEach((e) => { e.hidden = e.id !== 'v-' + v; });
   updateNavigation();
 
   if (v === 'account') {
@@ -209,7 +225,9 @@ async function loadBuilder() {
   buildSecs();
 }
 function collect() {
-  const f = $('#builderForm').elements, d = {};   for (const k of ['target_role', 'location', 'linkedin', 'skills', 'extras']) d[k] = f[k].value;   for (const s of Object.keys(SEC)) d[s] = $$(`[data-list="${s}"] .entry`).map((e) => Object.fromEntries([...e.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value])));
+  const f = $('#builderForm').elements, d = {};
+  for (const k of ['target_role', 'location', 'linkedin', 'skills', 'extras']) d[k] = f[k].value;
+  for (const s of Object.keys(SEC)) d[s] = $$(`[data-list="${s}"] .entry`).map((e) => Object.fromEntries([...e.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value])));
   return d;
 }
 async function saveBuilder() { bData = (await api('/api/resume/data', { method: 'PUT', body: JSON.stringify(collect()) })).data; }
@@ -303,3 +321,4 @@ function renderCourses() {
   updateNavigation(); 
   route();
 })();
+EOF
