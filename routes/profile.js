@@ -1,25 +1,45 @@
 const express = require('express');
-const db = require('../db');
-const { requireUser } = require('../auth');
+const db = require('../db.js'); // adjust path if necessary based on your setup
+
 const router = express.Router();
 
-router.get('/me', requireUser, (req, res) => {
-  const { id, name, phone, email, location, course, job_field, created_at } = req.user;
-  res.json({ id, name, phone, email, location, course, job_field, created_at });
+// Middleware to check session
+router.use((req, res, next) => {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'unauthorized' });
+  
+  const raw = auth.slice(7);
+  const crypto = require('crypto');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  
+  const session = db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime("now")').get(tokenHash);
+  if (!session) return res.status(401).json({ error: 'unauthorized' });
+  
+  req.user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
+  next();
 });
 
-router.put('/me', requireUser, (req, res) => {
-  const b = req.body || {};
-  const pick = (v, cur, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : cur);
-  if (b.phone && !/^[+\d][\d\s()-]{6,19}$/.test(String(b.phone).trim())) return res.status(400).json({ error: 'invalid_phone' });
-  const u = req.user;
-  db.prepare('UPDATE users SET name = ?, phone = ?, location = ?, course = ?, job_field = ? WHERE id = ?')
-    .run(pick(b.name, u.name, 100), pick(b.phone, u.phone, 25), pick(b.location, u.location, 150), pick(b.course, u.course, 150), pick(b.job_field, u.job_field, 150), u.id);
+router.get('/me', (req, res) => {
+  res.json(req.user);
+});
+
+router.put('/me', (req, res) => {
+  const { name, phone, course, job_field, location } = req.body;
+  
+  db.prepare(`
+    UPDATE users 
+    SET name = ?, phone = ?, course = ?, job_field = ?, location = ?
+    WHERE id = ?
+  `).run(
+    name || req.user.name, 
+    phone || req.user.phone, 
+    course || req.user.course, 
+    job_field || req.user.job_field, 
+    location || req.user.location,
+    req.user.id
+  );
+  
   res.json({ ok: true });
 });
 
-router.delete('/me', requireUser, (req, res) => {
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
-  res.json({ ok: true });
-});
 module.exports = router;
