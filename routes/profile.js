@@ -12,7 +12,8 @@ router.use((req, res, next) => {
   const crypto = require('crypto');
   const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
   
-  const session = db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime("now")').get(tokenHash);
+  // FIXED: Outer double quotes allow single quotes around 'now' so SQLite reads it correctly.
+  const session = db.prepare("SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash);
   if (!session) return res.status(401).json({ error: 'unauthorized' });
   
   req.user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
