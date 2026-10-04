@@ -1,3 +1,7 @@
+// resume.js — the student's details, a one-page ATS-friendly resume (text + real .docx),
+// and a LinkedIn kit. The AI writes the wording; the LAYOUT is built here in code so it's
+// always plain, single-column and ATS-safe. The AI never receives name/phone/email and is
+// told not to invent facts — it can only draw from what the student actually typed in.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
