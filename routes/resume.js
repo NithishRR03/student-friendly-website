@@ -1,6 +1,4 @@
 // resume.js — the student's details, an ATS-friendly resume, and a LinkedIn kit.
-// The AI writes the wording; the resume LAYOUT is built here in code so it is always plain,
-// single-column and ATS-safe. The AI never receives name/phone/email and is told not to invent facts.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const db = require('../db');
@@ -31,12 +29,18 @@ const align = (a, ref) => (Array.isArray(a) && a.length === ref.length ? a : nul
 function buildResume(u, d, A) {
   const bl = (arr, fb) => { const b = (arr || []).map((x) => str(x, 300).replace(/^[-•*\s]+/, '')).filter((x) => x.length > 2); return (b.length ? b : lines(fb).slice(0, 5)).map((x) => '- ' + x); };
   const skills = A.skills?.length ? A.skills : list(d.skills);
-  const summary = A.summary || `Motivated ${u.course} student seeking ${d.target_role || u.job_field} opportunities.${skills.length ? ` Skills include ${skills.slice(0, 6).join(', ')}.` : ''}`;
+  
+  let summaryText = A.summary;
+  if (!summaryText) {
+    summaryText = "Motivated " + u.course + " student seeking " + (d.target_role ? d.target_role : u.job_field) + " opportunities.";
+    if (skills.length) summaryText += " Skills include " + skills.slice(0, 6).join(', ') + ".";
+  }
+
   const out = [u.name.toUpperCase(), [d.location, u.phone, u.email, d.linkedin].filter(Boolean).join(' | ')];
   if (d.target_role) out.push(d.target_role);
   const sec = (t, body) => { if (body.length) out.push('', t, ...body); };
   const block = (arr, ai, head, fbKey) => arr.flatMap((e, i) => [...(i ? [''] : []), head(e), ...bl(ai?.[i]?.bullets, e[fbKey])]);
-  sec('PROFESSIONAL SUMMARY', [summary]);
+  sec('PROFESSIONAL SUMMARY', [summaryText]);
   sec('SKILLS', skills.length ? [skills.join(', ')] : []);
   sec('EXPERIENCE', block(d.exp, A.experience, (e) => [e.role, e.company, e.dates].filter(Boolean).join(' | '), 'details'));
   sec('PROJECTS', block(d.proj, A.projects, (p) => [p.name, p.link].filter(Boolean).join(' | '), 'details'));
@@ -51,12 +55,33 @@ const fbDesc = (r) => lines(r.details).slice(0, 5).map((x) => '• ' + x).join('
 function kitEntries(a, ref, key) { const ok = align(a, ref); return ref.map((r, i) => ({ title: titles[key](r), description: str(ok?.[i]?.description, 2000) || fbDesc(r) })); }
 
 function fallbackKit(u, d) {
-  const skills = list(d.skills), role = d.target_role || u.job_field, e0 = d.exp[0];
+  const skills = list(d.skills);
+  const role = d.target_role ? d.target_role : u.job_field;
+  const e0 = d.exp[0];
+
+  let aboutText = "I'm studying " + u.course + " and I'm looking for " + role + " opportunities.";
+  if (skills.length > 0) {
+    aboutText += " My skills include " + skills.slice(0, 8).join(', ') + ".";
+  }
+  if (e0) {
+    let lastRole = e0.role ? e0.role : "a team member";
+    let lastComp = e0.company ? " at " + e0.company : "";
+    aboutText += " Most recently I worked as " + lastRole + lastComp + ".";
+  }
+  aboutText += " I'd love to connect with people working in this field.";
+
+  let headline1 = role + " | " + u.course;
+  let headline2 = skills.length ? (u.course + " | " + skills.slice(0, 3).join(' • ')) : (u.course + " student | Seeking " + role + " roles");
+
   return {
-    headlines: [`${role} | ${u.course}`, skills.length ? `${u.course} | ${skills.slice(0, 3).join(' • ')}` : `${u.course} student | Seeking ${role} roles`],
-    about: `I'm studying ${u.course} and I'm looking for ${role} opportunities.${skills.length ? ` My skills include ${skills.slice(0, 8).join(', ')}.` : ''}${e0 ? ` Most recently I worked as ${e0.role \vert{}\vert{} 'a team member'}${e0.company ? ' at ' + e0.company : ''}.` : ''} I'd love to connect with people working in this field.`,
-    skills, pinned: skills.slice(0, 3), suggested: [],
-    experience: kitEntries(null, d.exp, 'exp'), education: kitEntries(null, d.edu, 'edu'), projects: kitEntries(null, d.proj, 'proj'),
+    headlines: [headline1, headline2],
+    about: aboutText,
+    skills: skills,
+    pinned: skills.slice(0, 3),
+    suggested: [],
+    experience: kitEntries(null, d.exp, 'exp'),
+    education: kitEntries(null, d.edu, 'edu'),
+    projects: kitEntries(null, d.proj, 'proj'),
     tips: ['Add a clear, friendly profile photo and a banner image.', 'Add numbers (people, hours, results) to each experience description.', 'Set a custom profile URL and follow companies in your target field.'],
   };
 }
@@ -64,7 +89,7 @@ function fallbackKit(u, d) {
 router.get('/data', requireUser, (req, res) => res.json({ data: load(req.user.id) }));
 router.put('/data', requireUser, (req, res) => {
   const data = clean(req.body);
-  db.prepare(`INSERT INTO resume_data (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = datetime('now')`).run(req.user.id, JSON.stringify(data));
+  db.prepare("INSERT INTO resume_data (user_id, data) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = datetime('now')").run(req.user.id, JSON.stringify(data));
   res.json({ data });
 });
 
@@ -74,12 +99,7 @@ router.post('/generate', limiter, requireUser, async (req, res, next) => {
     if (!has(d)) return res.status(400).json({ error: 'add_details_first' });
     let A = {}, ai = false;
     try {
-      const out = await llm(`You are an expert resume writer for UK graduate roles and applicant tracking systems (ATS). Write the content for an ATS-friendly resume. ${RULES}
-CRITICAL CONSTRAINTS: You must format this as a strict one-page, ATS-friendly resume for an entry-level candidate (fresher). You must strictly limit the total output to a maximum of 400 words. Based on the candidate's target job field, you must automatically generate and include exactly 6 highly relevant industry skills. Do not add filler text.
-Style: start each bullet with a strong past-tense action verb; be specific and concise (max about 22 words); 2-4 bullets per experience or project, 0-3 for education; use plain wording and the keywords a recruiter would search for the target role.
-Schema: {"summary":"2-3 sentences","skills":["exactly 6 auto-generated skills relevant to the target field"],"experience":[{"bullets":["..."]}],"projects":[{"bullets":["..."]}],"education":[{"bullets":["..."]}]}
-"experience", "projects" and "education" MUST contain exactly one item per input entry, in the same order.
-FACTS: ${facts(req.user, d)}`, 2000);
+      const out = await llm("You are an expert resume writer for UK graduate roles and applicant tracking systems (ATS). Write the content for an ATS-friendly resume. " + RULES + "\nCRITICAL CONSTRAINTS: You must format this as a strict one-page, ATS-friendly resume for an entry-level candidate (fresher). You must strictly limit the total output to a maximum of 400 words. Based on the candidate's target job field, you must automatically generate and include exactly 6 highly relevant industry skills. Do not add filler text.\nStyle: start each bullet with a strong past-tense action verb; be specific and concise (max about 22 words); 2-4 bullets per experience or project, 0-3 for education; use plain wording and the keywords a recruiter would search for the target role.\nSchema: {\"summary\":\"2-3 sentences\",\"skills\":[\"exactly 6 auto-generated skills relevant to the target field\"],\"experience\":[{\"bullets\":[\"...\"]}],\"projects\":[{\"bullets\":[\"...\"]}],\"education\":[{\"bullets\":[\"...\"]}]}\n\"experience\", \"projects\" and \"education\" MUST contain exactly one item per input entry, in the same order.\nFACTS: " + facts(req.user, d), 2000);
       if (out) {
         const j = parseJson(out), b = (arr, ref) => align(arr, ref)?.map((x) => ({ bullets: strs(x?.bullets, 5, 300) }));
         A = { summary: str(j.summary, 600), skills: strs(j.skills, 20), experience: b(j.experience, d.exp), projects: b(j.projects, d.proj), education: b(j.education, d.edu) };
@@ -96,11 +116,7 @@ router.post('/linkedin', limiter, requireUser, async (req, res, next) => {
     if (!has(d)) return res.status(400).json({ error: 'add_details_first' });
     let kit = null;
     try {
-      const out = await llm(`You are a LinkedIn profile coach for UK students and graduates. Write a complete LinkedIn profile kit. ${RULES}
-Style: About is first person, warm and specific, 120-220 words: a hook, strengths and experience, what they are looking for, and a friendly closing line. Headlines are under 120 characters and include target-role keywords. Descriptions are 2-4 short lines starting with "• ". No buzzword filler. If numbers would help but are missing, do not invent them; mention it in tips.
-Schema: {"headlines":["3 options"],"about":"...","skills":["up to 30 skills the student listed or clearly demonstrated, most relevant first"],"pinned_skills":["3"],"suggested_skills":["up to 10 common skills for the target role the student has NOT listed; they must only add these if genuinely true"],"experience":[{"description":"..."}],"education":[{"description":"..."}],"projects":[{"description":"..."}],"tips":["up to 5 practical profile tips"]}
-"experience", "education" and "projects" MUST contain exactly one item per input entry, in the same order.
-FACTS: ${facts(req.user, d)}`, 2500);
+      const out = await llm("You are a LinkedIn profile coach for UK students and graduates. Write a complete LinkedIn profile kit. " + RULES + "\nStyle: About is first person, warm and specific, 120-220 words: a hook, strengths and experience, what they are looking for, and a friendly closing line. Headlines are under 120 characters and include target-role keywords. Descriptions are 2-4 short lines starting with \"• \". No buzzword filler. If numbers would help but are missing, do not invent them; mention it in tips.\nSchema: {\"headlines\":[\"3 options\"],\"about\":\"...\",\"skills\":[\"up to 30 skills the student listed or clearly demonstrated, most relevant first\"],\"pinned_skills\":[\"3\"],\"suggested_skills\":[\"up to 10 common skills for the target role the student has NOT listed; they must only add these if genuinely true\"],\"experience\":[{\"description\":\"...\"}],\"education\":[{\"description\":\"...\"}],\"projects\":[{\"description\":\"...\"}],\"tips\":[\"up to 5 practical profile tips\"]}\n\"experience\", \"education\" and \"projects\" MUST contain exactly one item per input entry, in the same order.\nFACTS: " + facts(req.user, d), 2500);
       if (out) {
         const j = parseJson(out);
         kit = { headlines: strs(j.headlines, 3, 200), about: str(j.about, 2600), skills: strs(j.skills, 30), pinned: strs(j.pinned_skills, 3), suggested: strs(j.suggested_skills, 10),
