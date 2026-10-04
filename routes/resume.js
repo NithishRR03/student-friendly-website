@@ -54,7 +54,7 @@ function fallbackKit(u, d) {
   const skills = list(d.skills), role = d.target_role || u.job_field, e0 = d.exp[0];
   return {
     headlines: [`${role} | ${u.course}`, skills.length ? `${u.course} | ${skills.slice(0, 3).join(' • ')}` : `${u.course} student | Seeking ${role} roles`],
-    about: `I'm studying ${u.course} and I'm looking for ${role} opportunities.${skills.length ? ` My skills include ${skills.slice(0, 8).join(', ')}.` : ''}${e0 ? ` Most recently I worked as ${e0.role || 'a team member'}${e0.company ? ' at ' + e0.company : ''}.` : ''} I'd love to connect with people working in this field.`,
+    about: `I'm studying ${u.course} and I'm looking for ${role} opportunities.${skills.length ? ` My skills include ${skills.slice(0, 8).join(', ')}.` : ''}${e0 ? ` Most recently I worked as ${e0.role \vert{}\vert{} 'a team member'}${e0.company ? ' at ' + e0.company : ''}.` : ''} I'd love to connect with people working in this field.`,
     skills, pinned: skills.slice(0, 3), suggested: [],
     experience: kitEntries(null, d.exp, 'exp'), education: kitEntries(null, d.edu, 'edu'), projects: kitEntries(null, d.proj, 'proj'),
     tips: ['Add a clear, friendly profile photo and a banner image.', 'Add numbers (people, hours, results) to each experience description.', 'Set a custom profile URL and follow companies in your target field.'],
@@ -75,8 +75,9 @@ router.post('/generate', limiter, requireUser, async (req, res, next) => {
     let A = {}, ai = false;
     try {
       const out = await llm(`You are an expert resume writer for UK graduate roles and applicant tracking systems (ATS). Write the content for an ATS-friendly resume. ${RULES}
+CRITICAL CONSTRAINTS: You must format this as a strict one-page, ATS-friendly resume for an entry-level candidate (fresher). You must strictly limit the total output to a maximum of 400 words. Based on the candidate's target job field, you must automatically generate and include exactly 6 highly relevant industry skills. Do not add filler text.
 Style: start each bullet with a strong past-tense action verb; be specific and concise (max about 22 words); 2-4 bullets per experience or project, 0-3 for education; use plain wording and the keywords a recruiter would search for the target role.
-Schema: {"summary":"2-3 sentences","skills":["max 20, only skills listed or clearly demonstrated, most relevant first"],"experience":[{"bullets":["..."]}],"projects":[{"bullets":["..."]}],"education":[{"bullets":["..."]}]}
+Schema: {"summary":"2-3 sentences","skills":["exactly 6 auto-generated skills relevant to the target field"],"experience":[{"bullets":["..."]}],"projects":[{"bullets":["..."]}],"education":[{"bullets":["..."]}]}
 "experience", "projects" and "education" MUST contain exactly one item per input entry, in the same order.
 FACTS: ${facts(req.user, d)}`, 2000);
       if (out) {
