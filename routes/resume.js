@@ -54,7 +54,7 @@ function fallbackKit(u, d) {
   const skills = list(d.skills), role = d.target_role || u.job_field, e0 = d.exp[0];
   return {
     headlines: [`${role} | ${u.course}`, skills.length ? `${u.course} | ${skills.slice(0, 3).join(' • ')}` : `${u.course} student | Seeking ${role} roles`],
-    about: `I'm studying ${u.course} and I'm looking for ${role} opportunities.${skills.length ? ` My skills include ${skills.slice(0, 8).join(', ')}.` : ''}${e0 ? ` Most recently I worked as ${e0.role \vert{}\vert{} 'a team member'}${e0.company ? ' at ' + e0.company : ''}.` : ''} I'd love to connect with people working in this field.`,
+   about: `I'm studying ${u.course} and I'm looking for ${role} opportunities.${skills.length ? ` My skills include ${skills.slice(0, 8).join(', ')}.` : ''}${e0 ? ` Most recently I worked as ${e0.role \vert{}\vert{} 'a team member'}${e0.company ? ' at ' + e0.company : ''}.` : ''} I'd love to connect with people working in this field.`,
     skills, pinned: skills.slice(0, 3), suggested: [],
     experience: kitEntries(null, d.exp, 'exp'), education: kitEntries(null, d.edu, 'edu'), projects: kitEntries(null, d.proj, 'proj'),
     tips: ['Add a clear, friendly profile photo and a banner image.', 'Add numbers (people, hours, results) to each experience description.', 'Set a custom profile URL and follow companies in your target field.'],
