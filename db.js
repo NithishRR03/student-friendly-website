@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+const usingCustomDir = Boolean(process.env.DATA_DIR);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -11,6 +12,8 @@ const dbPath = path.join(dataDir, 'app.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -46,11 +49,34 @@ db.exec(`
   );
 `);
 
-// Safely add the location column to existing databases without breaking them
-try {
+// Add the location column to older databases only if it is really missing
+const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+if (!userColumns.includes('location')) {
   db.exec(`ALTER TABLE users ADD COLUMN location TEXT DEFAULT '-'`);
-} catch (e) {
-  // Column already exists, do nothing
+  console.log('[db] Added missing "location" column to users');
 }
+
+// ---- Startup diagnostics: tells you immediately if data is being lost between deploys ----
+const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+console.log(`[db] File: ${dbPath}`);
+console.log(`[db] Users at startup: ${userCount}`);
+if (!usingCustomDir && process.env.NODE_ENV === 'production') {
+  console.warn(
+    '[db] WARNING: DATA_DIR is not set. The database is inside the app folder and will be ' +
+    'erased on redeploy on most hosts. Attach a persistent disk and set DATA_DIR to its mount path.'
+  );
+}
+
+// Clean up expired OTPs and sessions now and then (keeps the file small)
+function cleanupExpired() {
+  try {
+    db.prepare(`DELETE FROM otps WHERE expires_at < ?`).run(new Date().toISOString());
+    db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString());
+  } catch (e) {
+    console.error('[db] cleanup error:', e.message);
+  }
+}
+// NOTE: assumes expires_at is stored as an ISO string. Remove this block if yours uses another format.
+setInterval(cleanupExpired, 60 * 60 * 1000).unref();
 
 module.exports = db;
