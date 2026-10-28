@@ -15,19 +15,24 @@ function newSession(userId) {
 }
 
 function requireUser(req, res, next) {
+  // ---- TEMP: skip login while testing (set AUTH_DISABLED=true in Render) ----
+  if (process.env.AUTH_DISABLED === 'true') {
+    req.user = db.prepare('SELECT * FROM users WHERE id = ?').get('demo-user');
+    return next();
+  }
+
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  
+
   const tokenHash = sha(auth.slice(7));
-  // FIXED: Outer double quotes allow single quotes around 'now'
   const session = db.prepare("SELECT * FROM sessions WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash);
-  
+
   if (!session) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  
+
   req.user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
   next();
 }
