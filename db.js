@@ -79,4 +79,16 @@ function cleanupExpired() {
 // NOTE: assumes expires_at is stored as an ISO string. Remove this block if yours uses another format.
 setInterval(cleanupExpired, 60 * 60 * 1000).unref();
 
+
+// ---- TEMP: demo user for testing with auth turned off ----
+if (process.env.AUTH_DISABLED === 'true') {
+  db.prepare(`
+    INSERT OR IGNORE INTO users (id, name, email, location)
+    VALUES ('demo-user', 'Demo User', 'demo@example.com', '-')
+  `).run();
+  console.warn('[auth] AUTH_DISABLED is on. Everyone is logged in as Demo User.');
+}
+
+
+
 module.exports = db;
